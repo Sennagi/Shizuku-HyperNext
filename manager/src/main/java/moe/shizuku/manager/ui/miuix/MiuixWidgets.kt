@@ -28,6 +28,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -72,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import kotlin.math.absoluteValue
 import top.yukonga.miuix.kmp.basic.Button as MiuixButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox as MiuixCheckbox
@@ -560,6 +562,14 @@ fun FloatingActionButton(
 val LocalTopAppBarScrollBehavior = staticCompositionLocalOf<ScrollBehavior?> { null }
 
 /**
+ * 页面顶栏的实测高度。MIUIX 顶栏自己吃掉状态栏 inset，展开/折叠时高度会变；
+ * 列表首项让开的高度必须等于这个实测值（等价于 Scaffold 的 topBar innerPadding），
+ * 不能再手算、也不能额外叠加 statusBar —— 那正是折叠后留白偏大的根因。
+ * 由 [TopAppBar] 用 onGloballyPositioned 写入，[topAppBarContentTopPadding] 读取。
+ */
+val LocalTopBarHeight = staticCompositionLocalOf<MutableState<Dp>?> { null }
+
+/**
  * Demo 的 LocalTopAppBarBackdrop：页面内容记录到图层，玻璃顶栏从中采样做渐进模糊。
  * 只有内容层（顶栏的兄弟节点）能应用 [LocalContentBackdrop]，顶栏本身绝不能在同一图层内，
  * 否则 GlassTopAppBar 内部再建图层会造成父子自引用，RenderNode 递归爆栈。
@@ -586,21 +596,22 @@ class GlassDropdownHost {
 }
 
 /**
- * 顶栏叠加在内容上时，列表首项要让开的高度：状态栏 inset + 展开的大字标题高度。
- * 128dp 覆盖 MIUIX 52dp 折叠高度 + 大字标题 + 底部 padding 与一点呼吸空间。
+ * 顶栏叠加在内容上时，列表首项要让开的高度 = 顶栏实测高度。
  *
- * 顶栏折叠时 `heightOffset` 为负（顶栏上移的距离），列表首项要跟着上移同样的量，
- * 否则顶栏让出来的空间会留下一块空白。这里的 padding 也用于下拉刷新 header 的定位，
- * 保证刷新头始终贴在列表第一项上方、不压住大字标题。
+ * MIUIX 顶栏默认吃掉状态栏 inset，展开/折叠时自身高度会变；这里直接读 [TopAppBar]
+ * 用 onGloballyPositioned 报告的实测值，与官方 Scaffold 用 topBar 高度做 innerPadding
+ * 完全等价，且不再重复叠加 statusBar（那正是折叠后列表留白偏大的根因）。
+ * 该值同时用于下拉刷新 header 的定位，让刷新头贴着列表第一项、不压住大字标题。
  */
 @Composable
 fun topAppBarContentTopPadding(): Dp {
-    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // heightOffset 是 px，必须经 density 转 dp（直接 .dp 会把 px 数值误当 dp）。
-    val collapse = with(LocalDensity.current) {
-        LocalTopAppBarScrollBehavior.current?.state?.heightOffset?.toDp() ?: 0.dp
+    val measured = LocalTopBarHeight.current?.value
+    return if (measured != null && measured > 0.dp) {
+        measured
+    } else {
+        // 首帧顶栏还没测量出来前的兜底：状态栏 + 折叠高度。
+        WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 52.dp
     }
-    return (statusBar + 128.dp + collapse).coerceAtLeast(statusBar + 52.dp)
 }
 
 /**
@@ -622,12 +633,15 @@ fun CollapsibleTopAppBarHost(
     }
     // 玻璃下拉弹层的宿主：与页面内容同一个根 Box（GlassIconDropdownMenu 的要求）。
     val dropdownHost = remember { GlassDropdownHost() }
+    // 顶栏实测高度：TopAppBar 写入，列表 padding 读取。
+    val topBarHeight = remember { mutableStateOf(0.dp) }
     CompositionLocalProvider(
         LocalTopAppBarScrollBehavior provides scrollBehavior,
         LocalTopAppBarBackdrop provides if (blur) backdrop else null,
         // 内容容器（铺满整页、顶栏叠加在它上面）负责记录，顶栏才能采样到它下面的内容。
         LocalContentBackdrop provides if (blur) Modifier.layerBackdrop(backdrop) else Modifier,
         LocalGlassDropdownHost provides dropdownHost,
+        LocalTopBarHeight provides topBarHeight,
     ) {
         Box(modifier.nestedScroll(scrollBehavior.nestedScrollConnection)) {
             content()
@@ -657,12 +671,20 @@ fun TopAppBar(
         scrollBehavior as? ScrollBehavior ?: LocalTopAppBarScrollBehavior.current
     val backdrop = LocalTopAppBarBackdrop.current
     val surfaceColor = MiuixTheme.colorScheme.surface
+    // 实测顶栏高度（含状态栏 inset、随展开/折叠变化），供列表 padding 跟随。
+    val localTopBarHeight = LocalTopBarHeight.current
+    val measuredModifier = modifier.onGloballyPositioned { coords ->
+        val dp = with(coords.density) { coords.size.height.toDp() }
+        if (localTopBarHeight != null && (localTopBarHeight.value - dp).absoluteValue > 0.5.dp) {
+            localTopBarHeight.value = dp
+        }
+    }
     if (backdrop != null && isRuntimeShaderSupported()) {
         // 与 Demo 一致：顶栏透明，滚动时从内容图层采样做渐进式模糊。
         // 前提是内容铺满整页、顶栏叠加在上方（见 CollapsibleTopAppBarHost 的注释）。
         GlassTopAppBar(
             title = title,
-            modifier = modifier,
+            modifier = measuredModifier,
             subtitle = subtitle,
             scrollBehavior = effectiveScrollBehavior,
             backdrop = backdrop,
@@ -675,7 +697,7 @@ fun TopAppBar(
     } else {
         MiuixTopAppBar(
             title = title,
-            modifier = modifier,
+            modifier = measuredModifier,
             navigationIcon = navigationIcon,
             actions = actions,
             subtitle = subtitle,
@@ -711,10 +733,17 @@ fun TopAppBar(
         }
     }
     val backdrop = LocalTopAppBarBackdrop.current
+    val localTopBarHeight = LocalTopBarHeight.current
+    val measuredModifier = modifier.onGloballyPositioned { coords ->
+        val dp = with(coords.density) { coords.size.height.toDp() }
+        if (localTopBarHeight != null && (localTopBarHeight.value - dp).absoluteValue > 0.5.dp) {
+            localTopBarHeight.value = dp
+        }
+    }
     if (backdrop != null && isRuntimeShaderSupported()) {
         GlassTopAppBar(
             title = "",
-            modifier = modifier,
+            modifier = measuredModifier,
             scrollBehavior = effectiveScrollBehavior,
             backdrop = backdrop,
             progressiveBlur = true,
@@ -726,7 +755,7 @@ fun TopAppBar(
     } else {
         MiuixTopAppBar(
             title = "",
-            modifier = modifier,
+            modifier = measuredModifier,
             navigationIcon = customTitle,
             actions = actions,
             scrollBehavior = effectiveScrollBehavior,
