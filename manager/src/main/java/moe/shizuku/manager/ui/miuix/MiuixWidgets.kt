@@ -103,6 +103,7 @@ import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
 import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorContent
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 
 /**
@@ -856,7 +857,11 @@ fun IconDropdownMenu(
             .clickable(enabled = enabled) { expanded = true },
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        // 告诉库「图标」的实际边界：形变动画复制这块内容、按它的中心位移，
+        // 不写这个 modifier 时库会复制整个 48dp 控件，图标就会飘出去再缩回（位移）。
+        Box(modifier = Modifier.glassPopupAnchorContent(anchor)) {
+            content()
+        }
     }
 }
 @Composable
