@@ -1,0 +1,61 @@
+plugins {
+    id "com.android.application"
+    id "dev.rikka.tools.refine"
+}
+
+android {
+    namespace = "rikka.shizuku.shell"
+    defaultConfig {
+        versionCode = rootProject.ext.versionCode
+        versionName = rootProject.ext.versionName
+        buildConfigField "String", "MANAGER_APPLICATION_ID", "\"${project(':manager').android.defaultConfig.applicationId}\""
+    }
+    buildTypes {
+        debug {
+            multiDexEnabled = false
+        }
+        release {
+            minifyEnabled = true
+            proguardFiles = ["proguard-rules.pro"]
+        }
+    }
+    dependenciesInfo {
+        includeInApk = false
+    }
+    lint {
+        checkReleaseBuilds = false
+    }
+    buildFeatures {
+        buildConfig = true
+    }
+}
+
+tasks.matching { it.name in ["assembleRelease", "assembleDebug"] }.configureEach {
+    doLast {
+        def variant = name == "assembleRelease" ? "release" : "debug"
+        def apk = fileTree("${buildDir}/outputs/apk/${variant}").matching { include "*.apk" }.singleFile
+        def dex = zipTree(apk).matching { include "classes*.dex" }.singleFile
+        copy {
+            from dex
+            into "${rootDir}/manager/src/main/assets"
+            rename { "rish_shizuku.dex" }
+        }
+        if (variant == "release") {
+            def mapping = new File(buildDir, "outputs/mapping/release/mapping.txt")
+            if (mapping.exists()) {
+                def mappingDir = new File(rootDir, "out/mapping")
+                mappingDir.mkdirs()
+                copy {
+                    from mapping
+                    into mappingDir
+                    rename { "cmd-v${rootProject.ext.versionName}.txt" }
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation libs.hidden.compat
+    compileOnly libs.hidden.stub
+}
