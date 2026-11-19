@@ -358,7 +358,9 @@ fun AppsScreen(
         RefreshBox(
             isRefreshing = refreshing,
             onRefresh = refresh,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            // 刷新头 offset 到列表第一项的位置，别停在状态栏下方压住大字标题。
+            contentPadding = PaddingValues(top = topAppBarContentTopPadding())
         ) {
         LazyColumn(
             state = listState,

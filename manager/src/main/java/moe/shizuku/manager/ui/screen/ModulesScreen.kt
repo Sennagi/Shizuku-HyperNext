@@ -340,7 +340,8 @@ fun ModulesScreen(
             // outside as often as from here.
             RefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = refresh
+                onRefresh = refresh,
+                contentPadding = PaddingValues(top = topAppBarContentTopPadding())
             ) {
             LazyColumn(
                 state = listState,

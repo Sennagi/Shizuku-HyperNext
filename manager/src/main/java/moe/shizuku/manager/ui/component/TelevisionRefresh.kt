@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.*
 import moe.shizuku.manager.ui.miuix.Icon
@@ -32,6 +33,7 @@ fun RefreshBox(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(),
     content: @Composable BoxScope.() -> Unit
 ) {
     if (!LocalTelevision.current) {
@@ -39,6 +41,7 @@ fun RefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
             modifier = modifier,
+            contentPadding = contentPadding,
             topAppBarScrollBehavior = LocalTopAppBarScrollBehavior.current,
         ) {
             Box(modifier = Modifier.fillMaxSize()) {

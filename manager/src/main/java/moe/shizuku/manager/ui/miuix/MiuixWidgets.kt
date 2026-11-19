@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.DisposableEffect
@@ -587,10 +588,20 @@ class GlassDropdownHost {
 /**
  * 顶栏叠加在内容上时，列表首项要让开的高度：状态栏 inset + 展开的大字标题高度。
  * 128dp 覆盖 MIUIX 52dp 折叠高度 + 大字标题 + 底部 padding 与一点呼吸空间。
+ *
+ * 顶栏折叠时 `heightOffset` 为负（顶栏上移的距离），列表首项要跟着上移同样的量，
+ * 否则顶栏让出来的空间会留下一块空白。这里的 padding 也用于下拉刷新 header 的定位，
+ * 保证刷新头始终贴在列表第一项上方、不压住大字标题。
  */
 @Composable
-fun topAppBarContentTopPadding(): Dp =
-    WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 128.dp
+fun topAppBarContentTopPadding(): Dp {
+    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // heightOffset 是 px，必须经 density 转 dp（直接 .dp 会把 px 数值误当 dp）。
+    val collapse = with(LocalDensity.current) {
+        LocalTopAppBarScrollBehavior.current?.state?.heightOffset?.toDp() ?: 0.dp
+    }
+    return (statusBar + 128.dp + collapse).coerceAtLeast(statusBar + 52.dp)
+}
 
 /**
  * 页面级滚动宿主：nestedScroll 挂在内容根，顶栏读取同一个 ScrollBehavior 折叠。
