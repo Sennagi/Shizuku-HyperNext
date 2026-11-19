@@ -1,41 +1,29 @@
 package moe.shizuku.manager.ui.screen
 
-import android.content.pm.ApplicationInfo
 import android.util.Log
 import moe.shizuku.manager.ui.component.PillButton
 import moe.shizuku.manager.ui.component.PillButtonQuiet
 import moe.shizuku.manager.AppConstants
 import android.content.pm.PackageInfo
-import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.*
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import moe.shizuku.manager.ui.miuix.AlertDialog
 import moe.shizuku.manager.ui.miuix.Button
 import moe.shizuku.manager.ui.miuix.Checkbox
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import moe.shizuku.manager.ui.miuix.HorizontalDivider
 import moe.shizuku.manager.ui.miuix.Icon
@@ -43,8 +31,6 @@ import moe.shizuku.manager.ui.miuix.IconButton
 import moe.shizuku.manager.ui.miuix.ListItem
 import androidx.compose.material3.ListItemDefaults
 import moe.shizuku.manager.ui.miuix.LoadingIndicator
-import moe.shizuku.manager.ui.miuix.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import moe.shizuku.manager.ui.miuix.IconDropdownMenu
@@ -52,13 +38,12 @@ import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.SnackbarResult
-import moe.shizuku.manager.ui.miuix.Surface
 import moe.shizuku.manager.ui.component.RefreshBox
 import moe.shizuku.manager.ui.component.TelevisionRefreshButton
 import moe.shizuku.manager.ui.component.ExpressiveSwitch
-import moe.shizuku.manager.ui.component.televisionTextInput
 import moe.shizuku.manager.ui.miuix.Text
 import moe.shizuku.manager.ui.miuix.LocalContentBackdrop
+import moe.shizuku.manager.ui.miuix.topAppBarContentTopPadding
 import moe.shizuku.manager.ui.miuix.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -75,7 +60,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
@@ -89,7 +73,6 @@ import moe.shizuku.manager.authorization.ClientProcessInfo
 import moe.shizuku.manager.authorization.GrantAuthenticator
 import moe.shizuku.manager.manage.InstalledPackages
 import moe.shizuku.manager.receiver.ShizukuReceiverStarter
-import moe.shizuku.manager.ui.component.AppFilterChip
 import moe.shizuku.manager.ui.component.AppIcon
 import moe.shizuku.manager.ui.component.packageLine
 import moe.shizuku.manager.ui.component.rowKey
@@ -97,9 +80,7 @@ import moe.shizuku.manager.ui.component.AppRowLine
 import moe.shizuku.manager.ui.component.AppStatusChips
 import moe.shizuku.manager.ui.component.ProcessCountChip
 import moe.shizuku.manager.ui.component.CenteredMessage
-import moe.shizuku.manager.ui.component.ChipEmphasis
 import moe.shizuku.manager.ui.component.SegmentedCard
-import moe.shizuku.manager.ui.component.StatusChip
 import moe.shizuku.manager.ui.component.stripHtmlTags
 import moe.shizuku.manager.utils.ShizukuStateMachine
 
@@ -111,24 +92,6 @@ enum class SortOrder {
     RECENTLY_UPDATED,
 
     ALPHABETICAL
-}
-
-/**
- * The Shizuku half of the filter: whether this app is allowed to use the service.
- *
- * The other half - what kind of app it is - is the same list every other app list in the app
- * uses, so the words are the same wherever the question is asked. Filtering by kind was on the
- * app-ops and Labs lists long before it was here, and a list of the same apps with a different
- * set of chips is how two screens end up disagreeing about what "hidden" means.
- */
-enum class AppFilter {
-    ALL,
-
-    /** Shizuku's permission is granted to these. */
-    GRANTED,
-
-    /** It is not the apps you can still hand it to. */
-    REVOKED
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -146,17 +109,10 @@ fun AppsScreen(
     val pm = context.packageManager
 
     var all by remember { mutableStateOf<List<PackageInfo>>(emptyList()) }
-    var query by remember { mutableStateOf("") }
     var sortOrder by remember { mutableStateOf(SortOrder.RECENTLY_INSTALLED) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var version by remember { mutableIntStateOf(0) }
-    var sortMenu by remember { mutableStateOf(false) }
-    var filter by remember { mutableStateOf(AppFilter.ALL) }
-    // The kind of app, from the same set of filters the app-ops and Labs lists use.
-    var kind by remember { mutableStateOf(ManageFilter.ALL) }
     var pendingBatch by remember { mutableStateOf<Boolean?>(null) }
-    // Set to the state every listed app should end up in, once the user confirms.
-    var pendingToggleAll by remember { mutableStateOf<Boolean?>(null) }
     var permissionLimited by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var running by remember { mutableStateOf(ShizukuStateMachine.isRunning()) }
@@ -263,54 +219,13 @@ fun AppsScreen(
 
     LaunchedEffect(grantedNames.size) { onGrantedCount(grantedNames.size) }
 
-    // What kind of app it is, which needs no server: the flags and the record are on the app
-    // already, so these three are worked out from the list the package manager just handed over.
-    val systemPackages = remember(all) {
-        all.filter { (it.applicationInfo?.flags ?: 0) and ApplicationInfo.FLAG_SYSTEM != 0 }
-            .map { it.packageName }.toSet()
-    }
-    val userPackages = remember(all, systemPackages) {
-        all.filter { it.applicationInfo != null && it.packageName !in systemPackages }
-            .map { it.packageName }.toSet()
-    }
-    val disabledPackages = remember(all) {
-        all.filter {
-            val ai = it.applicationInfo ?: return@filter false
-            !ai.enabled || (ai.flags and ApplicationInfo.FLAG_SUSPENDED) != 0
-        }.map { it.packageName }.toSet()
-    }
-
-    val shown = remember(
-        all, query, sortOrder, filter, kind,
-        userPackages, systemPackages, disabledPackages, launcherless, grantedNames
-    ) {
-        val q = query.trim()
-        val byKind = when (kind) {
-            ManageFilter.ALL -> all
-            ManageFilter.USER -> all.filter { it.packageName in userPackages }
-            ManageFilter.SYSTEM -> all.filter { it.packageName in systemPackages }
-            ManageFilter.DISABLED -> all.filter { it.packageName in disabledPackages }
-            ManageFilter.HIDDEN -> all.filter { it.packageName in launcherless }
-        }
-        val byFilter = when (filter) {
-            AppFilter.ALL -> byKind
-            AppFilter.GRANTED -> byKind.filter { it.packageName in grantedNames }
-            AppFilter.REVOKED -> byKind.filter { it.packageName !in grantedNames }
-        }
-        val filtered = if (q.isBlank()) {
-            byFilter
-        } else {
-            byFilter.filter {
-                val label = runCatching { it.applicationInfo?.loadLabel(pm)?.toString() ?: "" }.getOrDefault("")
-                label.contains(q, ignoreCase = true) || it.packageName.contains(q, ignoreCase = true)
-            }
-        }
+    val shown = remember(all, sortOrder) {
         when (sortOrder) {
             // The two timestamps the package manager keeps: when it was installed, and when
             // the APK was last replaced. They differ for anything that has been updated.
-            SortOrder.RECENTLY_INSTALLED -> filtered.sortedByDescending { it.firstInstallTime }
-            SortOrder.RECENTLY_UPDATED -> filtered.sortedByDescending { it.lastUpdateTime }
-            SortOrder.ALPHABETICAL -> filtered.sortedBy {
+            SortOrder.RECENTLY_INSTALLED -> all.sortedByDescending { it.firstInstallTime }
+            SortOrder.RECENTLY_UPDATED -> all.sortedByDescending { it.lastUpdateTime }
+            SortOrder.ALPHABETICAL -> all.sortedBy {
                 runCatching { it.applicationInfo?.loadLabel(pm)?.toString()?.lowercase() }
                     .getOrDefault(it.packageName)
             }
@@ -434,168 +349,12 @@ fun AppsScreen(
     val listState = rememberLazyListState()
 
     Box(modifier = Modifier.fillMaxSize()) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        if (selectionMode) {
-            TopAppBar(
-                title = stringResource(R.string.batch_selected_count, selected.size),
-                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-                navigationIcon = {
-                    IconButton(onClick = { selected = emptySet() }) {
-                        Icon(MiuixIcons.Close, contentDescription = null)
-                    }
-                },
-                actions = {
-                    PillButtonQuiet(onClick = { selected = shown.map { it.packageName }.toSet() }) {
-                        Text(stringResource(R.string.app_management_action_select_all))
-                    }
-                    PillButtonQuiet(onClick = { pendingBatch = true }) {
-                        Text(stringResource(R.string.app_management_action_grant))
-                    }
-                    PillButtonQuiet(onClick = { pendingBatch = false }) {
-                        Text(stringResource(R.string.app_management_action_revoke))
-                    }
-                }
-            )
-        } else {
-            TopAppBar(
-                title = stringResource(R.string.tab_apps),
-                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-                actions = {
-                    // Long-press and Select all exist for picking individual apps; this is
-                    // the one-tap version for when every listed app should be flipped.
-                    if (shown.isNotEmpty()) {
-                        PillButtonQuiet(onClick = {
-                            scope.launch {
-                                // A temporary grant is access too, so an app holding one
-                                // counts as granted here. Otherwise Toggle all offers to grant
-                                // it permanently instead of taking the access away.
-                                val allGranted = shown.all { it.packageName in grantedNames }
-                                pendingToggleAll = !allGranted
-                            }
-                        }) { Text(stringResource(R.string.app_management_toggle_all)) }
-                    }
-                    TelevisionRefreshButton(refreshing, refresh)
-                    // MIUIX 风格的图标下拉菜单（Popup 自绘，见 IconDropdownMenu 的注释）。
-                    IconDropdownMenu(
-                        entry = DropdownEntry(
-                            items = listOf(
-                                DropdownItem(
-                                    text = stringResource(R.string.app_management_sort_last_added),
-                                    selected = sortOrder == SortOrder.RECENTLY_INSTALLED,
-                                    onClick = { sortOrder = SortOrder.RECENTLY_INSTALLED },
-                                ),
-                                DropdownItem(
-                                    text = stringResource(R.string.app_management_sort_updated),
-                                    selected = sortOrder == SortOrder.RECENTLY_UPDATED,
-                                    onClick = { sortOrder = SortOrder.RECENTLY_UPDATED },
-                                ),
-                                DropdownItem(
-                                    text = stringResource(R.string.app_management_sort_alphabetical),
-                                    selected = sortOrder == SortOrder.ALPHABETICAL,
-                                    onClick = { sortOrder = SortOrder.ALPHABETICAL },
-                                ),
-                            ),
-                        ),
-                    ) {
-                        Icon(MiuixIcons.Sort, contentDescription = null)
-                    }
-                }
-            )
-        }
-
-        // A search field, not just a text field: Material 3 gives search boxes the fully
-        // rounded shape and a quieter outline, so this reads as "search" at a glance
-        // instead of as a box someone put a magnifier in.
-        // Same two rows as the app-ops and Labs lists: what kind of app it is on one row,
-        // then Shizuku's own question on a row of its own. Every chip gets an equal slot and
-        // its label shrinks to fit, so a wide font never pushes the row onto a second line.
-        // Filter first, search within it: the two answer different questions and the search
-        // box alone cannot say "only what is granted".
-        Row(
+        // 内容铺满整页（含顶栏下方），记录进 backdrop；顶栏叠加在上方采样它做渐进模糊。
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .then(LocalContentBackdrop.current)
         ) {
-            ManageFilter.entries.forEach { option ->
-                val count = when (option) {
-                    ManageFilter.ALL -> all.size
-                    ManageFilter.USER -> userPackages.size
-                    ManageFilter.SYSTEM -> systemPackages.size
-                    ManageFilter.DISABLED -> disabledPackages.size
-                    ManageFilter.HIDDEN -> launcherless.size
-                }
-                AppFilterChip(
-                    modifier = Modifier.weight(1f),
-                    label = stringResource(
-                        when (option) {
-                            ManageFilter.ALL -> R.string.manage_filter_all
-                            ManageFilter.USER -> R.string.manage_filter_user
-                            ManageFilter.SYSTEM -> R.string.manage_filter_system
-                            ManageFilter.DISABLED -> R.string.manage_filter_disabled
-                            ManageFilter.HIDDEN -> R.string.manage_filter_hidden
-                        }
-                    ),
-                    count = count,
-                    selected = kind == option,
-                    onClick = { kind = option }
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AppFilterChip(
-                modifier = Modifier.weight(1f),
-                label = stringResource(R.string.apps_filter_granted),
-                count = grantedNames.size,
-                selected = filter == AppFilter.GRANTED,
-                onClick = {
-                    filter = if (filter == AppFilter.GRANTED) AppFilter.ALL else AppFilter.GRANTED
-                }
-            )
-            AppFilterChip(
-                modifier = Modifier.weight(1f),
-                label = stringResource(R.string.apps_filter_revoked),
-                count = all.size - grantedNames.size,
-                selected = filter == AppFilter.REVOKED,
-                onClick = {
-                    filter = if (filter == AppFilter.REVOKED) AppFilter.ALL else AppFilter.REVOKED
-                }
-            )
-        }
-
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .televisionTextInput(MaterialTheme.shapes.extraLarge),
-            placeholder = { Text(stringResource(R.string.app_management_search_hint)) },
-            leadingIcon = { Icon(MiuixIcons.Search, contentDescription = null) },
-            trailingIcon = {
-                // Clearing a search is the one thing you always end up wanting.
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { query = "" }) {
-                        Icon(MiuixIcons.Close, contentDescription = stringResource(android.R.string.cancel))
-                    }
-                }
-            },
-            singleLine = true,
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = MiuixTheme.colorScheme.dividerLine,
-                focusedBorderColor = MiuixTheme.colorScheme.primary
-            )
-        )
-
         RefreshBox(
             isRefreshing = refreshing,
             onRefresh = refresh,
@@ -603,10 +362,12 @@ fun AppsScreen(
         ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().then(LocalContentBackdrop.current),
-            // Every app is its own card, so they need room between them; the padding
-            // keeps the cards off the edges like the cards on the other tabs.
-            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = bottomPadding),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = topAppBarContentTopPadding(),
+                end = 16.dp,
+                bottom = bottomPadding
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(shown, key = { it.rowKey() }) { pi ->
@@ -704,8 +465,8 @@ fun AppsScreen(
             CenteredMessage { LoadingIndicator() }
         }
 
-        // Say why the page is empty: no server to ask, nothing matching the search, or
-        // genuinely no apps a blank page explains nothing.
+        // Say why the page is empty: no server to ask, or genuinely no apps —
+        // a blank page on its own explains nothing.
         if (!loading && shown.isEmpty()) {
             CenteredMessage {
                 when {
@@ -723,20 +484,6 @@ fun AppsScreen(
                         ) { Text(stringResource(R.string.action_start)) }
                     }
 
-                    query.isNotBlank() -> Text(
-                        text = stringResource(R.string.apps_no_match),
-                        style = MiuixTheme.textStyles.body2,
-                        textAlign = TextAlign.Center
-                    )
-
-                    // A filter can legitimately hold nothing (Hidden often does), which is
-                    // not the same as there being no apps at all.
-                    filter != AppFilter.ALL || kind != ManageFilter.ALL -> Text(
-                        text = stringResource(R.string.apps_filter_empty),
-                        style = MiuixTheme.textStyles.body2,
-                        textAlign = TextAlign.Center
-                    )
-
                     else -> Text(
                         text = stringResource(R.string.apps_empty),
                         style = MiuixTheme.textStyles.body2,
@@ -746,7 +493,67 @@ fun AppsScreen(
             }
         }
         }
-    }
+        }
+
+        if (selectionMode) {
+            TopAppBar(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth(),
+                title = stringResource(R.string.batch_selected_count, selected.size),
+                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
+                navigationIcon = {
+                    IconButton(onClick = { selected = emptySet() }) {
+                        Icon(MiuixIcons.Close, contentDescription = null)
+                    }
+                },
+                actions = {
+                    PillButtonQuiet(onClick = { selected = shown.map { it.packageName }.toSet() }) {
+                        Text(stringResource(R.string.app_management_action_select_all))
+                    }
+                    PillButtonQuiet(onClick = { pendingBatch = true }) {
+                        Text(stringResource(R.string.app_management_action_grant))
+                    }
+                    PillButtonQuiet(onClick = { pendingBatch = false }) {
+                        Text(stringResource(R.string.app_management_action_revoke))
+                    }
+                }
+            )
+        } else {
+            TopAppBar(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth(),
+                title = stringResource(R.string.tab_apps),
+                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
+                actions = {
+                    TelevisionRefreshButton(refreshing, refresh)
+                    IconDropdownMenu(
+                        entry = DropdownEntry(
+                            items = listOf(
+                                DropdownItem(
+                                    text = stringResource(R.string.app_management_sort_last_added),
+                                    selected = sortOrder == SortOrder.RECENTLY_INSTALLED,
+                                    onClick = { sortOrder = SortOrder.RECENTLY_INSTALLED },
+                                ),
+                                DropdownItem(
+                                    text = stringResource(R.string.app_management_sort_updated),
+                                    selected = sortOrder == SortOrder.RECENTLY_UPDATED,
+                                    onClick = { sortOrder = SortOrder.RECENTLY_UPDATED },
+                                ),
+                                DropdownItem(
+                                    text = stringResource(R.string.app_management_sort_alphabetical),
+                                    selected = sortOrder == SortOrder.ALPHABETICAL,
+                                    onClick = { sortOrder = SortOrder.ALPHABETICAL },
+                                ),
+                            ),
+                        ),
+                    ) {
+                        Icon(MiuixIcons.Sort, contentDescription = null)
+                    }
+                }
+            )
+        }
 
     // The undo offer sits above the list and above the floating bar, which is drawn over
     // the page rather than beside it, so the same padding the list uses to clear the bar is
@@ -786,34 +593,6 @@ fun AppsScreen(
             confirmButton = {
                 PillButton(onClick = { permissionLimited = false }) {
                     Text(stringResource(android.R.string.ok))
-                }
-            }
-        )
-    }
-
-    pendingToggleAll?.let { grant ->
-        AlertDialog(
-            onDismissRequest = { pendingToggleAll = null },
-            title = {
-                Text(
-                    stringResource(
-                        if (grant) R.string.app_management_batch_grant_title
-                        else R.string.app_management_batch_revoke_title
-                    )
-                )
-            },
-            // Only what is listed: searching first is how you narrow this down.
-            text = { Text(stringResource(R.string.app_management_toggle_all_message, shown.size)) },
-            confirmButton = {
-                PillButton(onClick = {
-                    val target = shown.toList()
-                    pendingToggleAll = null
-                    applyBatch(grant, target)
-                }) { Text(stringResource(android.R.string.ok)) }
-            },
-            dismissButton = {
-                PillButtonQuiet(onClick = { pendingToggleAll = null }) {
-                    Text(stringResource(android.R.string.cancel))
                 }
             }
         )
