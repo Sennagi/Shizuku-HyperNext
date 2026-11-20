@@ -51,6 +51,13 @@ const val DEFAULT_ACCENT_COLOR = "#3F51B5"
 val LocalAmoledTheme = staticCompositionLocalOf { false }
 
 /**
+ * 当前是否深色。深浅色的唯一判定点：用户在应用内强制深/浅色时，直接读
+ * `isSystemInDarkTheme()` 的地方不会跟随，症状是「只有那一块颜色不对」。
+ * 组合树内一律读这个。
+ */
+val LocalAppDarkMode = staticCompositionLocalOf { false }
+
+/**
  * True on a television. A TV is driven by a remote's D-pad rather than a finger, so the few
  * places that lay themselves out for a thumb - the floating tab bar above all - read this and
  * do something a remote can reach instead. Everything else is the phone layout as it is.
@@ -237,6 +244,7 @@ fun ShizukuTheme(content: @Composable () -> Unit) {
 
     CompositionLocalProvider(
         LocalAmoledTheme provides amoled,
+        LocalAppDarkMode provides darkTheme,
         LocalTelevision provides television,
     ) {
         MiuixTheme(colors = miuixColors) {

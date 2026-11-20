@@ -86,7 +86,6 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -132,9 +131,10 @@ import moe.shizuku.manager.ui.component.AutoSizeText
 import moe.shizuku.manager.ui.component.ExpressiveCard
 import moe.shizuku.manager.ui.component.SegmentedColumn
 import moe.shizuku.manager.ui.theme.LocalAmoledTheme
+import moe.shizuku.manager.ui.theme.RunState
+import moe.shizuku.manager.ui.theme.StatusColors
 import moe.shizuku.manager.ui.component.SegmentedListItem
 import moe.shizuku.manager.ui.component.stripHtmlTags
-import moe.shizuku.manager.utils.CustomTabsHelper
 import moe.shizuku.manager.utils.EnvironmentUtils
 import moe.shizuku.manager.utils.PermissionOwnership
 import moe.shizuku.manager.utils.SettingsHelper
@@ -948,23 +948,6 @@ fun HomeScreen(bottomPadding: Dp) {
                 }
             }
 
-            item {
-                // The other half of the About row in Settings, and at the end of the page
-                // rather than the top: nobody opens this app to be asked, and the person who
-                // has scrolled past the device details is the one who has got something out
-                // of it. Same page, same way of opening it.
-                ExpressiveCard(
-                    icon = MiuixIcons.Notes,
-                    title = stringResource(R.string.settings_support_coffee),
-                    body = stringResource(R.string.home_support_body),
-                    onClick = {
-                        CustomTabsHelper.launchUrlOrCopy(
-                            context,
-                            context.getString(R.string.buymeacoffee_url)
-                        )
-                    }
-                )
-            }
             }
 
         }
@@ -1023,21 +1006,12 @@ private fun StatusCard(
  */
 @Composable
 private fun StatusSummaryCard(running: Boolean) {
-    // Running is green, stopped is a neutral surface: a stopped server is a normal state,
-    // not an error, so it must not borrow the theme's container colour.
-    val dark = isSystemInDarkTheme()
-    val runningContainer = if (dark) Color(0xFF16301D) else Color(0xFFE6F7EC)
-    val runningContent = if (dark) Color(0xFF7FE0A0) else Color(0xFF1B7A3A)
-    val containerColor = if (running) {
-        runningContainer
-    } else {
-        MiuixTheme.colorScheme.surfaceContainerHigh
-    }
-    val contentColor = if (running) {
-        runningContent
-    } else {
-        MiuixTheme.colorScheme.onSurface
-    }
+    // 语义色统一走 StatusColors token（对齐 Mishka）：运行=固定淡绿，停止=警示红。
+    // 停止不是错误，但也不能借 surfaceContainerHigh —— 那样和普通卡片长得一样，
+    // 一眼看不出服务没在跑。
+    val runState = if (running) RunState.Running else RunState.Stopped
+    val containerColor = StatusColors.runStateContainer(runState)
+    val contentColor = StatusColors.runState(runState)
     val shape = MaterialTheme.shapes.large
     val outlined = LocalAmoledTheme.current && !running
 
