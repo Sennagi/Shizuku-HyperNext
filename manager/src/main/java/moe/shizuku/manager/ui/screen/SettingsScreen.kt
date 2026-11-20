@@ -219,7 +219,9 @@ fun SettingsScreen(
     alwaysShowNavigationBar: Boolean = false,
     onAlwaysShowNavigationBarChange: (Boolean) -> Unit = {},
     // 进入设置子页面时通知外层隐藏底栏（Demo 的子页面是独立页面，不带底栏）。
-    onSubPageChange: (Boolean) -> Unit = {}
+    onSubPageChange: (Boolean) -> Unit = {},
+    // 作为「更多」的子页时由它提供返回：底栏已经没有设置格，这页要靠顶栏返回。
+    onBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -1413,8 +1415,13 @@ fun SettingsScreen(
                 stringResource(currentSection.titleRes)
             },
             navigationIcon = {
+                // 二级分类返回首页；作为「更多」的子页时（onBack 非空），首页也要能退回更多。
                 if (currentSection != null) {
                     IconButton(onClick = { section = null }) {
+                        Icon(MiuixIcons.Back, contentDescription = null)
+                    }
+                } else if (onBack != null) {
+                    IconButton(onClick = onBack) {
                         Icon(MiuixIcons.Back, contentDescription = null)
                     }
                 }

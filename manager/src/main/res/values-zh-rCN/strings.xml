@@ -465,6 +465,7 @@
     <string name="hiding_notification_stopped_text">Shizuku 未运行，隐藏功能无法检测当前打开的应用。所有已隐藏的设置均已还原。</string>
     <string name="hiding_carries_session_wireless">未应用：Shizuku 正在使用无线调试，隐藏它会停止 Shizuku。</string>
     <string name="hiding_carries_session_usb">未应用：Shizuku 正在使用 USB 调试，隐藏它会停止 Shizuku。</string>
+    <string name="tab_more">更多</string>
     <string name="tab_settings">设置</string>
     <string name="home_status_transport_label">连接方式</string>
     <string name="home_status_started_with">当前</string>

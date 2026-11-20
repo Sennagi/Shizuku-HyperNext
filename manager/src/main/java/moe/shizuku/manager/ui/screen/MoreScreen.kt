@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.ExperimentalMaterial3Api
 import moe.shizuku.manager.ui.miuix.Icon
+import moe.shizuku.manager.ui.miuix.IconButton
 import androidx.compose.material3.MaterialTheme
 import moe.shizuku.manager.ui.miuix.Text
 import moe.shizuku.manager.ui.miuix.LocalContentBackdrop
@@ -105,7 +106,11 @@ private val ActiveGreen = Color(0xFF34C759)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LabsScreen(bottomPadding: Dp, onOpenDetail: (Detail) -> Unit) {
+fun MoreScreen(
+    bottomPadding: Dp,
+    onOpenDetail: (Detail) -> Unit,
+    onOpenSettings: () -> Unit
+) {
     val context = LocalContext.current
 
     // What each feature is doing, so the list can be read without opening eight screens to find
@@ -259,7 +264,17 @@ fun LabsScreen(bottomPadding: Dp, onOpenDetail: (Detail) -> Unit) {
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth(),
-            title = stringResource(R.string.tab_labs),
+            title = stringResource(R.string.tab_more),
+            // 设置整页从这里进：底栏不再有设置格，改成顶栏这颗齿轮。
+            // 与模块页顶栏同一套 IconButton（玻璃顶栏里自动浮现圆形背景）。
+            actions = {
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = MiuixIcons.Settings,
+                        contentDescription = stringResource(R.string.tab_settings)
+                    )
+                }
+            },
             windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
         )
     }

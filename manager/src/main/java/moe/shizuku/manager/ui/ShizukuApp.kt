@@ -100,7 +100,7 @@ import moe.shizuku.manager.ui.screen.RotationScreen
 import moe.shizuku.manager.ui.screen.IntentsScreen
 import moe.shizuku.manager.ui.screen.DeviceInfoScreen
 import moe.shizuku.manager.ui.screen.DisplayScreen
-import moe.shizuku.manager.ui.screen.LabsScreen
+import moe.shizuku.manager.ui.screen.MoreScreen
 import moe.shizuku.manager.ui.screen.LogScreen
 import moe.shizuku.manager.ui.screen.LabsToggleScreen
 import moe.shizuku.manager.ui.screen.ManageScreen
@@ -173,6 +173,12 @@ enum class Detail(
     INTENTS,
     PERMISSIONS,
 
+    /**
+     * 全部设置项。从「更多」页右上角的设置按钮进入，不再占底栏一格：
+     * 底栏留给会被反复用的四个页面，设置是偶尔去改一次的地方。
+     */
+    SETTINGS,
+
     /** Every accessibility service, with the switch the system screen owns and a keep-alive pin. */
     ACCESSIBILITY,
 
@@ -234,14 +240,13 @@ private val tabs = listOf(
     Tab(R.string.tab_home, MiuixIcons.Home, MiuixIcons.Home),
     // The two icons their own app uses for these two screens: the panel for what an app is
     // allowed to do, the stacked layers for the modules that add to it.
-    Tab(R.string.tab_apps, MiuixIcons.Settings, MiuixIcons.Settings),
+    // 应用页管的是「哪些 App 拿到 Shizuku 授权」，用网格图标；原来这里是齿轮，
+    // 而齿轮现在代表设置（更多页右上角），两者同图标会看混。
+    Tab(R.string.tab_apps, MiuixIcons.GridView, MiuixIcons.GridView),
     Tab(R.string.tab_modules, MiuixIcons.Layers, MiuixIcons.Layers),
-    // Labs holds the things that are gone to rather than lived in: the app-ops list and the
-    // shell to begin with, and whatever else turns out to belong there. Each was a tab of its
-    // own before, which is a lot of the bar for two screens that are mostly a list you read
-    // once, and it also made the shell's own session the price of switching to Settings.
-    Tab(R.string.tab_labs, MiuixIcons.Help, MiuixIcons.Help),
-    Tab(R.string.tab_settings, MiuixIcons.Settings, MiuixIcons.Settings),
+    // 「更多」取代了原来的实验室：实验室那二十项本来就只是一份要翻的清单，
+    // 占底栏一格太贵。现在实验室整份列表搬进更多页，设置也从这里右上角进。
+    Tab(R.string.tab_more, MiuixIcons.More, MiuixIcons.More),
 )
 
 @Composable
@@ -422,6 +427,17 @@ fun ShizukuApp(onRunSetup: () -> Unit) {
                                 onInstalled = {}
                             )
 
+                            // 设置整页作为「更多」的子页：底栏不再有设置格，
+                            // 从更多页右上角的设置按钮进这里。
+                            // 设置页里点开的那些二级项（LabSwitch 等）由它自己的
+                            // 内部 section 机制处理，不往外抛 detail。
+                            Detail.SETTINGS -> SettingsScreen(
+                                bottomPadding = 0.dp,
+                                onOpenDetail = {},
+                                onRunSetup = onRunSetup,
+                                onBack = { detail = null }
+                            )
+
                             Detail.STEALTH -> StealthScreen(onBack = { detail = null })
                             Detail.TERMINAL -> TerminalScreen(onBack = { detail = null })
                             Detail.INTENTS -> IntentsScreen(onBack = { detail = null })
@@ -564,8 +580,6 @@ private fun MainTabs(
     // belongs to what is on screen rather than to the app's tabs, so the pager stops dragging
     // while one of them is up.
     var modulesFullscreen by remember { mutableStateOf(false) }
-    // 设置子页面是全屏的独立页面，底栏要跟着隐藏。
-    var settingsSubPage by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(1500)
         warmUp = true
@@ -647,15 +661,10 @@ private fun MainTabs(
                             active = active,
                             onFullscreenChange = { modulesFullscreen = it }
                         )
-                        3 -> LabsScreen(bottomPadding = bottomPadding, onOpenDetail = onOpenDetail)
-                        4 -> SettingsScreen(
+                        3 -> MoreScreen(
                             bottomPadding = bottomPadding,
                             onOpenDetail = onOpenDetail,
-                            onRunSetup = onRunSetup,
-                            showNavigationBarSetting = true,
-                            alwaysShowNavigationBar = alwaysShowNavigationBar,
-                            onAlwaysShowNavigationBarChange = onAlwaysShowNavigationBarChange,
-                            onSubPageChange = { settingsSubPage = it }
+                            onOpenSettings = { onOpenDetail(Detail.SETTINGS) }
                         )
                     }
                 }
@@ -664,7 +673,7 @@ private fun MainTabs(
         }   // 关闭记录 backdrop 的内容层
 
         // 设置子页面只在设置 tab 上隐藏底栏；滑去别的 tab 底栏照常出现。
-        if (!modulesFullscreen && !(settingsSubPage && pagerState.currentPage == 4)) {
+        if (!modulesFullscreen) {
             // 官方 GlassNavigationBar：它自己带 defaultWindowInsetsPadding 与 fillMaxWidth，
             // 靠 align(BottomCenter) 叠在内容之上。
             // 关键：它必须是 backdrop 内容层的**兄弟**（绘制在其后），这样它采样到的
@@ -906,11 +915,10 @@ private fun TelevisionTabs(
                         active = true,
                         onFullscreenChange = {}
                     )
-                    3 -> LabsScreen(bottomPadding = 0.dp, onOpenDetail = onOpenDetail)
-                    4 -> SettingsScreen(
+                    3 -> MoreScreen(
                         bottomPadding = 0.dp,
                         onOpenDetail = onOpenDetail,
-                        onRunSetup = onRunSetup
+                        onOpenSettings = { onOpenDetail(Detail.SETTINGS) }
                     )
                 }
                 }
