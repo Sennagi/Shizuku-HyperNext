@@ -56,7 +56,7 @@ import androidx.compose.material.icons.rounded.Wifi
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import moe.shizuku.manager.ui.miuix.AlertDialog
 import moe.shizuku.manager.ui.miuix.Button
-import androidx.compose.material3.ButtonDefaults
+import moe.shizuku.manager.ui.miuix.miuixButtonColors
 import moe.shizuku.manager.ui.miuix.LoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import moe.shizuku.manager.ui.miuix.Icon
@@ -500,8 +500,8 @@ fun HomeScreen(bottomPadding: Dp) {
                                     Button(
                                         modifier = Modifier.fillMaxWidth(),
                                         onClick = { turnDeveloperOptionsBackOn() },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MiuixTheme.colorScheme.error,
+                                        colors = miuixButtonColors(
+                                            color = MiuixTheme.colorScheme.error,
                                             contentColor = MiuixTheme.colorScheme.onError
                                         )
                                     ) {
@@ -517,8 +517,8 @@ fun HomeScreen(bottomPadding: Dp) {
                                                 )
                                             }
                                         },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MiuixTheme.colorScheme.error,
+                                        colors = miuixButtonColors(
+                                            color = MiuixTheme.colorScheme.error,
                                             contentColor = MiuixTheme.colorScheme.onError
                                         )
                                     ) { Text(stringResource(R.string.action_connect_wifi)) }
@@ -535,8 +535,8 @@ fun HomeScreen(bottomPadding: Dp) {
                                                 scope.launch { openAdbPortAndStart(context) }
                                             }
                                         },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MiuixTheme.colorScheme.error,
+                                        colors = miuixButtonColors(
+                                            color = MiuixTheme.colorScheme.error,
                                             contentColor = MiuixTheme.colorScheme.onError
                                         )
                                     ) { Text(stringResource(R.string.action_open_adb_port)) }
@@ -553,8 +553,8 @@ fun HomeScreen(bottomPadding: Dp) {
                                                     .launch(context)
                                             }
                                         },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MiuixTheme.colorScheme.error,
+                                        colors = miuixButtonColors(
+                                            color = MiuixTheme.colorScheme.error,
                                             contentColor = MiuixTheme.colorScheme.onError
                                         )
                                     ) { Text(stringResource(R.string.action_open_wireless_debugging)) }
@@ -569,8 +569,8 @@ fun HomeScreen(bottomPadding: Dp) {
                                                 runCatching { context.showAccessibilityDialog() }
                                             }
                                         },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MiuixTheme.colorScheme.error,
+                                        colors = miuixButtonColors(
+                                            color = MiuixTheme.colorScheme.error,
                                             contentColor = MiuixTheme.colorScheme.onError
                                         )
                                     ) { Text(stringResource(R.string.action_pair)) }
@@ -583,7 +583,10 @@ fun HomeScreen(bottomPadding: Dp) {
                                         1.dp,
                                         MiuixTheme.colorScheme.onErrorContainer
                                     ),
-                                    colors = ButtonDefaults.outlinedButtonColors(
+                                    // 同样必须是 MIUIX 的 ButtonColors：
+                                    // material3 的 outlinedButtonColors 类型不同，会被丢掉。
+                                    colors = miuixButtonColors(
+                                        color = androidx.compose.ui.graphics.Color.Transparent,
                                         contentColor = MiuixTheme.colorScheme.onErrorContainer
                                     )
                                 ) { Text(stringResource(R.string.action_dismiss)) }
@@ -619,8 +622,8 @@ fun HomeScreen(bottomPadding: Dp) {
                                             batteryIgnored = SettingsHelper.isIgnoringBatteryOptimizations(context)
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MiuixTheme.colorScheme.error,
+                                    colors = miuixButtonColors(
+                                        color = MiuixTheme.colorScheme.error,
                                         contentColor = MiuixTheme.colorScheme.onError
                                     )
                                 ) { Text(stringResource(R.string.snackbar_action_fix)) }
@@ -1275,12 +1278,14 @@ private fun ServerActionButtons(
             .fillMaxWidth()
             .heightIn(min = 52.dp),
         enabled = !starting,
-        shape = CircleShape,
-        // 禁用态沿用同一组色：转圈画在上面，底色若淡一半整个按钮会显得消失。
-        colors = ButtonDefaults.buttonColors(
-            containerColor = palette.container,
+        // 必须用 MIUIX 的 buttonColors：material3 的 ButtonDefaults 返回的是另一套
+        // ButtonColors 类型，传进 MiuixButton 会被丢掉、回落成主题主色 ——
+        // 这正是「设了淡红却还是蓝的」的原因。
+        colors = miuixButtonColors(
+            color = palette.container,
             contentColor = palette.content,
-            disabledContainerColor = palette.container,
+            // 禁用态沿用同一组色：转圈画在上面，底色若淡一半整个按钮会显得消失。
+            disabledColor = palette.container,
             disabledContentColor = palette.content
         )
     ) {

@@ -294,14 +294,40 @@ fun Button(
     interactionSource: Any? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
+    // colors 必须真的透传下去：此前一律写死 buttonColorsPrimary()，调用方传进来的
+    // 颜色被静默丢掉 —— 表现为「设了淡红却还是主题主色」，编译期毫无提示。
+    // MiuixButton 没有 shape 参数（形状由 colors/样式决定），故只透传 colors。
     MiuixButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        colors = MiuixButtonDefaults.buttonColorsPrimary(),
+        colors = colors as? top.yukonga.miuix.kmp.basic.ButtonColors
+            ?: MiuixButtonDefaults.buttonColorsPrimary(),
         content = content,
     )
 }
+
+/**
+ * MIUIX 的按钮配色，参数与 Material3 的 ButtonDefaults.buttonColors 同名，
+ * 方便页面直接换用。
+ *
+ * 页面里此前用的是 androidx.compose.material3.ButtonDefaults，它返回的是
+ * Material3 的 ButtonColors，与 MIUIX 的 ButtonColors 是两个类型 —— 传进
+ * MiuixButton 会被丢掉（或类型转换失败回落主色），这就是「设了颜色不生效」的由来。
+ */
+@Composable
+fun miuixButtonColors(
+    color: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+    disabledColor: androidx.compose.ui.graphics.Color = color,
+    disabledContentColor: androidx.compose.ui.graphics.Color = contentColor,
+): top.yukonga.miuix.kmp.basic.ButtonColors =
+    MiuixButtonDefaults.buttonColors(
+        color = color,
+        disabledColor = disabledColor,
+        contentColor = contentColor,
+        disabledContentColor = disabledContentColor,
+    )
 
 @Composable
 fun OutlinedButton(
