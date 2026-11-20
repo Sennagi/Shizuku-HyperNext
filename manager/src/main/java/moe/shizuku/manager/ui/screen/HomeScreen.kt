@@ -44,7 +44,6 @@ import top.yukonga.miuix.kmp.icon.extended.*
 import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.Coffee
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Numbers
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -131,6 +130,7 @@ import moe.shizuku.manager.ui.component.AutoSizeText
 import moe.shizuku.manager.ui.component.ExpressiveCard
 import moe.shizuku.manager.ui.component.SegmentedColumn
 import moe.shizuku.manager.ui.theme.LocalAmoledTheme
+import moe.shizuku.manager.ui.theme.ActionKind
 import moe.shizuku.manager.ui.theme.RunState
 import moe.shizuku.manager.ui.theme.StatusColors
 import moe.shizuku.manager.ui.component.SegmentedListItem
@@ -203,26 +203,6 @@ fun HomeScreen(bottomPadding: Dp) {
     }
     val scope = rememberCoroutineScope()
 
-    /**
-     * Flips one of the three platform switches, then reads it back.
-     *
-     * The same call the tiles use, so this row and a tile cannot disagree, and the state shown is
-     * the one the platform ended up with: a setting adb refuses leaves the button where it was and
-     * the toast says so, instead of a button that moved and a setting that did not.
-     */
-    fun toggleSwitch(switch: LabSwitch, show: (Boolean) -> Unit) {
-        scope.launch {
-            val now = withContext(Dispatchers.IO) {
-                val current = switch.isOn()
-                if (current == null) null else {
-                    switch.apply(context, !current)
-                    switch.isOn()
-                }
-            }
-            show(now ?: false)
-            switch.announce(context, now)
-        }
-    }
 
     // Two runtime permissions stand between a start and its first network operation: Android 16+
     // gates local-network discovery, and Android 13+ gates the local-only hotspot a no-network
@@ -700,35 +680,6 @@ fun HomeScreen(bottomPadding: Dp) {
                         ShizukuSettings.setManuallyStopped(true)
                         ShizukuStateMachine.set(ShizukuStateMachine.State.STOPPING)
                         runCatching { Shizuku.exit() }
-                    },
-                    // A bounce: forceStart replaces the running server instead of
-                    // being ignored as "already running".
-                    onRestart = {
-                        startWithRequiredPermissions(ShizukuSettings.getStartMethod()) {
-                            ShizukuReceiverStarter.start(
-                                context,
-                                forceStart = true,
-                                userInitiated = true,
-                                reason = "home-restart"
-                            )
-                        }
-                    }
-                )
-            }
-            item {
-                // The three debugging switches, under the server's own, because they are what
-                // starting needs and what a person turns off when they are done. Blue is on and
-                // the quiet surface is off, the same blue the Restart button uses for "this does
-                // something": no new colour role. The icons name each switch without colour.
-                DebuggingActionButtons(
-                    devOptions = devOptions,
-                    usbDebugging = usbDebugging,
-                    wirelessDebugging = wirelessDebugging,
-                    onDevOptions = { toggleSwitch(LabSwitch.DEVELOPER_OPTIONS) { devOptions = it } },
-                    onUsbDebugging = { toggleSwitch(LabSwitch.USB_DEBUGGING) { usbDebugging = it } },
-                    wirelessSupported = wirelessSupported,
-                    onWirelessDebugging = {
-                        toggleSwitch(LabSwitch.WIRELESS_DEBUGGING) { wirelessDebugging = it }
                     }
                 )
             }
@@ -1288,235 +1239,53 @@ private fun StatusFact(fact: StatusFactEntry, modifier: Modifier = Modifier) {
     }
 }
 
-/** Restart's blue see the note where it is used. */
 /**
- * The three debugging switches, as three buttons under the server's own.
+ * 启动 / 停止，一行一个大按钮（对齐 Mishka 的 ActionButtonsSection）。
  *
- * Two lines each, with the break after the first word. The label shrinks to keep those
- * lines whole instead of adding a third line made of a stray "s" or the end of a word.
- */
-@Composable
-private fun DebuggingActionButtons(
-    devOptions: Boolean,
-    usbDebugging: Boolean,
-    wirelessDebugging: Boolean,
-    wirelessSupported: Boolean,
-    onDevOptions: () -> Unit,
-    onUsbDebugging: () -> Unit,
-    onWirelessDebugging: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        DebuggingButton(
-            icon = MiuixIcons.File,
-            label = stringResource(R.string.home_switch_dev_options),
-            on = devOptions,
-            onClick = onDevOptions
-        )
-        DebuggingButton(
-            icon = MiuixIcons.Link,
-            label = stringResource(R.string.home_switch_usb),
-            on = usbDebugging,
-            onClick = onUsbDebugging
-        )
-        if (wirelessSupported) {
-            DebuggingButton(
-                icon = MiuixIcons.ScreenMirroring,
-                label = stringResource(R.string.home_switch_wireless),
-                on = wirelessDebugging,
-                onClick = onWirelessDebugging
-            )
-        }
-    }
-}
-
-@Composable
-private fun RowScope.DebuggingButton(
-    icon: ImageVector,
-    label: String,
-    on: Boolean,
-    onClick: () -> Unit
-) {
-    Button(
-        // The height a two-line label needs; a longer translation grows the button instead
-        // of being cut off.
-        modifier = Modifier
-            .weight(1f)
-            .heightIn(min = 64.dp),
-        onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-        // The theme's own roles rather than a fixed blue: with dynamic colour on, "on" is the
-        // wallpaper's accent, and with it off it is the brand seed - the same pair the rest of the
-        // screen is drawn in. Restart keeps its blue on purpose, because it is an action and not a
-        // state, and a state that changes colour with the wallpaper would stop being recognisable.
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (on) MiuixTheme.colorScheme.primary
-            else MiuixTheme.colorScheme.surfaceContainerHighest,
-            contentColor = if (on) MiuixTheme.colorScheme.onPrimary
-            else MiuixTheme.colorScheme.onSurfaceVariantSummary
-        ),
-        // On the pure black theme that off container is black as well, so the button itself
-        // disappeared into the page and left three labels floating with nothing around them.
-        // The same hairline the other quiet buttons wear is what says where it is.
-        border = if (LocalAmoledTheme.current && !on) {
-            BorderStroke(1.dp, MiuixTheme.colorScheme.dividerLine)
-        } else {
-            null
-        }
-    ) {
-        Row(
-            // No fillMaxWidth here: the icon and label are centred as one group. Letting the
-            // label take the remaining width centred the text inside its own box but left the
-            // icon at the button's edge, which is what still read as left-aligned.
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(Modifier.width(6.dp))
-            AutoSizeText(
-                // The break goes after the first word rather than into the string: a
-                // translation keeps its own words, and the font shrinks only if one of
-                // those words still does not fit on its line.
-                text = label.replaceFirst(' ', '\n'),
-                // Both lines sit centred under each other, and the group is centred in the
-                // button by the row above.
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                fillWidth = false
-            )
-        }
-    }
-}
-
-/** A button's glyph and label, kept together and centred in the pill. */
-@Composable
-private fun ButtonIconLabel(
-    icon: ImageVector,
-    label: String,
-    textAlign: TextAlign = TextAlign.Center
-) {
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = label,
-            textAlign = textAlign
-        )
-    }
-}
-
-private val RestartBlue = Color(0xFF2563EB)
-
-/**
- * Start, Stop and Restart below the status card, all always visible. An action that
- * doesn't apply right now is disabled rather than hidden, so the row never shifts.
- * A start in flight shows as progress inside Start, where the eye already is.
+ * 运行中只显示「停止」，未运行只显示「启动」——不是三个并排、按状态禁用。
+ * 三个并排时其中两个恒为禁用态，占位却不做事；只留当前能做的那个，
+ * 按钮本身也就成了状态的一部分。
  *
- * The row is a set of equals: the pill shape and a minimum height are set here rather than
- * left to the button default, because a longer translation wraps and the default shape turns
- * into a rounded rectangle while its one-line neighbours stay pills. The button grows when
- * the label needs more room, so the translation is not cut off.
+ * 颜色走 StatusColors.actionButton：启动淡绿、停止淡红，与状态卡同族。
+ * 不复用主题 primary —— 「停止」跟强调色走会在蓝色主题下变蓝，警示语义就没了。
+ *
+ * 用 Button 而不是 TextButton：本项目的 TextButton 是 Button 的别名（同样的
+ * 填充样式），没有 Mishka 那个 text/TextButtonColors 签名，走 buttonColors 等价。
  */
 @Composable
 private fun ServerActionButtons(
     running: Boolean,
     starting: Boolean,
     onStart: () -> Unit,
-    onStop: () -> Unit,
-    onRestart: () -> Unit
+    onStop: () -> Unit
 ) {
-    // The minimum keeps the row compact when the labels fit and lets a wrapped translation
-    // grow the button when it does not. The smaller horizontal padding leaves long words more
-    // width before they have to break.
-    val buttonPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    val action = if (running) ActionKind.Stop else ActionKind.Start
+    val palette = StatusColors.actionButton(action)
+    val label = if (running) stringResource(R.string.action_stop)
+    else stringResource(R.string.action_start)
+
+    Button(
+        onClick = if (running) onStop else onStart,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp),
+        enabled = !starting,
+        shape = CircleShape,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = palette.container,
+            contentColor = palette.content,
+            disabledContainerColor = palette.container.copy(alpha = 0.5f),
+            disabledContentColor = palette.content.copy(alpha = 0.5f)
+        )
     ) {
-        Button(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            enabled = !running && !starting,
-            onClick = onStart,
-            shape = CircleShape,
-            contentPadding = buttonPadding
-        ) {
-            if (starting) {
-                // The morphing loader rather than a ring: it is the shape Material 3
-                // gives an action that is running, and it is legible at button size.
-                LoadingIndicator(
-                    modifier = Modifier.size(22.dp),
-                    // The button is disabled while starting, so pick a colour that
-                    // still reads against the disabled container.
-                    color = MiuixTheme.colorScheme.primary
-                )
-            } else {
-                ButtonIconLabel(
-                    icon = MiuixIcons.Play,
-                    label = stringResource(R.string.action_start)
-                )
-            }
+        if (starting) {
+            LoadingIndicator(
+                modifier = Modifier.size(22.dp),
+                color = palette.content
+            )
+            Spacer(Modifier.width(10.dp))
         }
-
-        // Red: stopping is the destructive one, and the theme's error role stays red
-        // whatever the seed colour is.
-        Button(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            enabled = running,
-            onClick = onStop,
-            shape = CircleShape,
-            contentPadding = buttonPadding,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MiuixTheme.colorScheme.error,
-                contentColor = MiuixTheme.colorScheme.onError
-            )
-        ) {
-            ButtonIconLabel(
-                icon = MiuixIcons.Close,
-                label = stringResource(R.string.action_stop)
-            )
-        }
-
-        // Blue on purpose: Material 3 has no blue role and the palette is seeded from
-        // the wallpaper or the brand colour, so a role here would come out indigo or
-        // teal depending on the theme.
-        Button(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            enabled = running,
-            onClick = onRestart,
-            shape = CircleShape,
-            contentPadding = buttonPadding,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = RestartBlue,
-                contentColor = Color.White
-            )
-        ) {
-            ButtonIconLabel(
-                icon = MiuixIcons.Refresh,
-                label = stringResource(R.string.action_restart)
-            )
-        }
+        Text(text = label)
     }
 }
 

@@ -59,7 +59,30 @@ object StatusColors {
         }
     }
 
-    // —— 内部调色板。色值是手挑的，名字里的色阶只是记号，与 Material 官方色阶不逐一对应 ——
+    /**
+     * 动作按钮（启动 / 停止）的容器与文字色，对齐 Mishka 的 actionButton。
+     *
+     * 启动用淡绿底 + 绿字（和运行态同族），停止用淡红底 + 红字：这两个是语义动作，
+     * 不跟随强调色 —— 跟随之后「停止」在蓝色主题下会变成蓝的，破坏警示语义。
+     */
+    @Composable
+    @ReadOnlyComposable
+    fun actionButton(action: ActionKind): ActionPalette {
+        val isDark = LocalAppDarkMode.current
+        return when (action) {
+            ActionKind.Start -> ActionPalette(
+                container = if (isDark) Color(0xFF1B3A26) else Color(0xFFDFF5E3),
+                content = if (isDark) Color(0xFF66BB6A) else Color(0xFF43A047),
+            )
+
+            ActionKind.Stop -> ActionPalette(
+                container = if (isDark) Color(0xFF3A1B1B) else Color(0xFFFDE8E8),
+                content = if (isDark) Color(0xFFEF5350) else Color(0xFFE53935),
+            )
+        }
+    }
+
+    // Palette: hand-picked values; the scale names are labels, not Material scale steps.
     private val Green300Dark = Color(0xFF81C784)
     private val Green600Light = Color(0xFF4CAF50)
     private val Amber300Dark = Color(0xFFF9A825)
@@ -72,3 +95,9 @@ object StatusColors {
 
 /** 运行状态：运行 / 过渡 / 停止 */
 enum class RunState { Running, Pending, Stopped }
+
+/** 动作种类：启动 / 停止 */
+enum class ActionKind { Start, Stop }
+
+/** 一组动作按钮配色。 */
+data class ActionPalette(val container: Color, val content: Color)
