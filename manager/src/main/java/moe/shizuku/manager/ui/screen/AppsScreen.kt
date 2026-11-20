@@ -33,6 +33,7 @@ import androidx.compose.material3.ListItemDefaults
 import moe.shizuku.manager.ui.miuix.LoadingIndicator
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.Scaffold
 import moe.shizuku.manager.ui.miuix.IconDropdownMenu
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.basic.SnackbarHost
@@ -43,6 +44,7 @@ import moe.shizuku.manager.ui.component.TelevisionRefreshButton
 import moe.shizuku.manager.ui.component.ExpressiveSwitch
 import moe.shizuku.manager.ui.miuix.Text
 import moe.shizuku.manager.ui.miuix.LocalContentBackdrop
+import moe.shizuku.manager.ui.miuix.miuixOverScroll
 import moe.shizuku.manager.ui.miuix.topAppBarContentTopPadding
 import moe.shizuku.manager.ui.miuix.TopAppBar
 import androidx.compose.runtime.Composable
@@ -348,8 +350,70 @@ fun AppsScreen(
 
     val listState = rememberLazyListState()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // 内容铺满整页（含顶栏下方），记录进 backdrop；顶栏叠加在上方采样它做渐进模糊。
+    // 顶栏作为 Scaffold 的 topBar slot：Scaffold 实测它的高度给 innerPadding，
+    // 折叠时列表跟随上移；GlassTopAppBar 在 slot 内 provide context，actions 里所有
+    // IconButton（含排序玻璃下拉）都随滚动浮现圆形背景，与 Mishka 一致。
+    val appTopBar: @Composable () -> Unit = {
+        if (selectionMode) {
+            TopAppBar(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.batch_selected_count, selected.size),
+                navigationIcon = {
+                    IconButton(onClick = { selected = emptySet() }) {
+                        Icon(MiuixIcons.Close, contentDescription = null)
+                    }
+                },
+                actions = {
+                    PillButtonQuiet(onClick = { selected = shown.map { it.packageName }.toSet() }) {
+                        Text(stringResource(R.string.app_management_action_select_all))
+                    }
+                    PillButtonQuiet(onClick = { pendingBatch = true }) {
+                        Text(stringResource(R.string.app_management_action_grant))
+                    }
+                    PillButtonQuiet(onClick = { pendingBatch = false }) {
+                        Text(stringResource(R.string.app_management_action_revoke))
+                    }
+                }
+            )
+        } else {
+            TopAppBar(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.tab_apps),
+                actions = {
+                    TelevisionRefreshButton(refreshing, refresh)
+                    IconDropdownMenu(
+                        entry = DropdownEntry(
+                            items = listOf(
+                                DropdownItem(
+                                    text = stringResource(R.string.app_management_sort_last_added),
+                                    selected = sortOrder == SortOrder.RECENTLY_INSTALLED,
+                                    onClick = { sortOrder = SortOrder.RECENTLY_INSTALLED },
+                                ),
+                                DropdownItem(
+                                    text = stringResource(R.string.app_management_sort_updated),
+                                    selected = sortOrder == SortOrder.RECENTLY_UPDATED,
+                                    onClick = { sortOrder = SortOrder.RECENTLY_UPDATED },
+                                ),
+                                DropdownItem(
+                                    text = stringResource(R.string.app_management_sort_alphabetical),
+                                    selected = sortOrder == SortOrder.ALPHABETICAL,
+                                    onClick = { sortOrder = SortOrder.ALPHABETICAL },
+                                ),
+                            ),
+                        ),
+                    ) {
+                        Icon(MiuixIcons.Sort, contentDescription = null)
+                    }
+                }
+            )
+        }
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = appTopBar,
+    ) { innerPadding ->
+        // 内容铺满整页（含顶栏下方），记录进 backdrop；Scaffold 实测顶栏高度，列表跟随折叠。
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -360,13 +424,14 @@ fun AppsScreen(
             onRefresh = refresh,
             modifier = Modifier.fillMaxSize(),
             // 刷新头 offset 到列表第一项的位置，别停在状态栏下方压住大字标题。
-            contentPadding = PaddingValues(top = topAppBarContentTopPadding())
+            contentPadding = PaddingValues(top = innerPadding.calculateTopPadding())
         ) {
         LazyColumn(
             state = listState,
+            modifier = Modifier.miuixOverScroll(),
             contentPadding = PaddingValues(
                 start = 16.dp,
-                top = topAppBarContentTopPadding(),
+                top = innerPadding.calculateTopPadding(),
                 end = 16.dp,
                 bottom = bottomPadding
             ),
@@ -497,76 +562,17 @@ fun AppsScreen(
         }
         }
 
-        if (selectionMode) {
-            TopAppBar(
+        // The undo offer sits above the list and above the floating bar, which is drawn over
+        // the page rather than beside it, so the same padding the list uses to clear the bar is
+        // what keeps the snackbar from appearing underneath it.
+        Box(modifier = Modifier.fillMaxSize()) {
+            SnackbarHost(
+                state = snackbarHostState,
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth(),
-                title = stringResource(R.string.batch_selected_count, selected.size),
-                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-                navigationIcon = {
-                    IconButton(onClick = { selected = emptySet() }) {
-                        Icon(MiuixIcons.Close, contentDescription = null)
-                    }
-                },
-                actions = {
-                    PillButtonQuiet(onClick = { selected = shown.map { it.packageName }.toSet() }) {
-                        Text(stringResource(R.string.app_management_action_select_all))
-                    }
-                    PillButtonQuiet(onClick = { pendingBatch = true }) {
-                        Text(stringResource(R.string.app_management_action_grant))
-                    }
-                    PillButtonQuiet(onClick = { pendingBatch = false }) {
-                        Text(stringResource(R.string.app_management_action_revoke))
-                    }
-                }
-            )
-        } else {
-            TopAppBar(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth(),
-                title = stringResource(R.string.tab_apps),
-                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-                actions = {
-                    TelevisionRefreshButton(refreshing, refresh)
-                    IconDropdownMenu(
-                        entry = DropdownEntry(
-                            items = listOf(
-                                DropdownItem(
-                                    text = stringResource(R.string.app_management_sort_last_added),
-                                    selected = sortOrder == SortOrder.RECENTLY_INSTALLED,
-                                    onClick = { sortOrder = SortOrder.RECENTLY_INSTALLED },
-                                ),
-                                DropdownItem(
-                                    text = stringResource(R.string.app_management_sort_updated),
-                                    selected = sortOrder == SortOrder.RECENTLY_UPDATED,
-                                    onClick = { sortOrder = SortOrder.RECENTLY_UPDATED },
-                                ),
-                                DropdownItem(
-                                    text = stringResource(R.string.app_management_sort_alphabetical),
-                                    selected = sortOrder == SortOrder.ALPHABETICAL,
-                                    onClick = { sortOrder = SortOrder.ALPHABETICAL },
-                                ),
-                            ),
-                        ),
-                    ) {
-                        Icon(MiuixIcons.Sort, contentDescription = null)
-                    }
-                }
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 16.dp, end = 16.dp, bottom = bottomPadding + 16.dp)
             )
         }
-
-    // The undo offer sits above the list and above the floating bar, which is drawn over
-    // the page rather than beside it, so the same padding the list uses to clear the bar is
-    // what keeps the snackbar from appearing underneath it.
-    SnackbarHost(
-        state = snackbarHostState,
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(start = 16.dp, end = 16.dp, bottom = bottomPadding + 16.dp)
-    )
-
     }
 
     if (permissionLimited) {

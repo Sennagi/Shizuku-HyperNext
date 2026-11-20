@@ -28,7 +28,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -73,7 +72,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import kotlin.math.absoluteValue
 import top.yukonga.miuix.kmp.basic.Button as MiuixButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import top.yukonga.miuix.kmp.basic.Checkbox as MiuixCheckbox
@@ -104,10 +102,12 @@ import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
 import top.yukonga.miuix.kmp.glass.glassPopupAnchor
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorContent
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 
 /**
  * Shizuku-Next 的控件统一入口：函数签名沿用原 Material3 调用方式，
@@ -251,12 +251,23 @@ fun IconButton(
     interactionSource: Any? = null,
     content: @Composable () -> Unit,
 ) {
-    MiuixIconButton(
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled,
-        content = content,
-    )
+    if (LocalInGlassTopBar.current) {
+        // 顶栏里用 GlassIconButton：它读 GlassTopAppBar 的 LocalGlassTopAppBarContext，
+        // 内容上滑后由 materialProgress 统一浮现圆形毛玻璃背景，与官方 Demo 一致。
+        // enabled=false 时只禁用点击、不画背景，避免禁用按钮也浮出来。
+        GlassIconButton(
+            onClick = { if (enabled) onClick() },
+            modifier = modifier,
+            content = content,
+        )
+    } else {
+        MiuixIconButton(
+            onClick = onClick,
+            modifier = modifier,
+            enabled = enabled,
+            content = content,
+        )
+    }
 }
 
 @Composable
@@ -562,14 +573,6 @@ fun FloatingActionButton(
 val LocalTopAppBarScrollBehavior = staticCompositionLocalOf<ScrollBehavior?> { null }
 
 /**
- * 页面顶栏的实测高度。MIUIX 顶栏自己吃掉状态栏 inset，展开/折叠时高度会变；
- * 列表首项让开的高度必须等于这个实测值（等价于 Scaffold 的 topBar innerPadding），
- * 不能再手算、也不能额外叠加 statusBar —— 那正是折叠后留白偏大的根因。
- * 由 [TopAppBar] 用 onGloballyPositioned 写入，[topAppBarContentTopPadding] 读取。
- */
-val LocalTopBarHeight = staticCompositionLocalOf<MutableState<Dp>?> { null }
-
-/**
  * Demo 的 LocalTopAppBarBackdrop：页面内容记录到图层，玻璃顶栏从中采样做渐进模糊。
  * 只有内容层（顶栏的兄弟节点）能应用 [LocalContentBackdrop]，顶栏本身绝不能在同一图层内，
  * 否则 GlassTopAppBar 内部再建图层会造成父子自引用，RenderNode 递归爆栈。
@@ -581,6 +584,13 @@ val LocalTopAppBarBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
  * 与顶栏互为兄弟，所以玻璃顶栏采样它不会递归。
  */
 val LocalContentBackdrop = staticCompositionLocalOf<Modifier> { Modifier }
+
+/**
+ * 标记当前 IconButton 位于 GlassTopAppBar 顶栏内。GlassTopAppBar 在 actions/navigationIcon
+ * 槽位 provide 的 LocalGlassTopAppBarContext 是 internal，跨包读不到；用这个标记让 [IconButton]
+ * 自动换成 GlassIconButton，顶栏所有按钮才能随内容滚动一起浮现圆形毛玻璃背景。
+ */
+internal val LocalInGlassTopBar = staticCompositionLocalOf { false }
 
 /**
  * 玻璃下拉菜单的页面级宿主。`GlassIconDropdownMenu` 是 BoxScope 扩展，靠
@@ -596,22 +606,30 @@ class GlassDropdownHost {
 }
 
 /**
- * 顶栏叠加在内容上时，列表首项要让开的高度 = 顶栏实测高度。
- *
- * MIUIX 顶栏默认吃掉状态栏 inset，展开/折叠时自身高度会变；这里直接读 [TopAppBar]
- * 用 onGloballyPositioned 报告的实测值，与官方 Scaffold 用 topBar 高度做 innerPadding
- * 完全等价，且不再重复叠加 statusBar（那正是折叠后列表留白偏大的根因）。
- * 该值同时用于下拉刷新 header 的定位，让刷新头贴着列表第一项、不压住大字标题。
+ * 顶栏叠加在内容上时，列表首项要让开的高度：状态栏 inset + 展开的大字标题高度。
+ * heightOffset 为负（顶栏上移量），折叠时列表让开的高度跟着减小。
  */
 @Composable
 fun topAppBarContentTopPadding(): Dp {
-    val measured = LocalTopBarHeight.current?.value
-    return if (measured != null && measured > 0.dp) {
-        measured
-    } else {
-        // 首帧顶栏还没测量出来前的兜底：状态栏 + 折叠高度。
-        WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 52.dp
+    val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val collapse = with(LocalDensity.current) {
+        LocalTopAppBarScrollBehavior.current?.state?.heightOffset?.toDp() ?: 0.dp
     }
+    return (statusBar + 112.dp + collapse).coerceAtLeast(statusBar + 52.dp)
+}
+
+/**
+ * 给列表接上 MIUIX 的越界回弹：把阻尼后的越界 offset 写进 ScrollBehavior，
+ * 顶栏材料才会随回弹浮现（GlassTopAppBar 读 state.overscrollOffset），
+ * 列表本身也才有弹簧回弹。没有它时上下拉到头是"死"的。
+ * 挂在 LazyColumn 的 modifier 上，不要挂在 Scaffold/根 Box 外层（顶栏会跟着位移）。
+ */
+@Composable
+fun Modifier.miuixOverScroll(): Modifier {
+    val behavior = LocalTopAppBarScrollBehavior.current
+    return this.overScrollVertical(
+        onOffsetChanged = { offset -> behavior?.state?.overscrollOffset = offset },
+    )
 }
 
 /**
@@ -633,15 +651,12 @@ fun CollapsibleTopAppBarHost(
     }
     // 玻璃下拉弹层的宿主：与页面内容同一个根 Box（GlassIconDropdownMenu 的要求）。
     val dropdownHost = remember { GlassDropdownHost() }
-    // 顶栏实测高度：TopAppBar 写入，列表 padding 读取。
-    val topBarHeight = remember { mutableStateOf(0.dp) }
     CompositionLocalProvider(
         LocalTopAppBarScrollBehavior provides scrollBehavior,
         LocalTopAppBarBackdrop provides if (blur) backdrop else null,
         // 内容容器（铺满整页、顶栏叠加在它上面）负责记录，顶栏才能采样到它下面的内容。
         LocalContentBackdrop provides if (blur) Modifier.layerBackdrop(backdrop) else Modifier,
         LocalGlassDropdownHost provides dropdownHost,
-        LocalTopBarHeight provides topBarHeight,
     ) {
         Box(modifier.nestedScroll(scrollBehavior.nestedScrollConnection)) {
             content()
@@ -671,33 +686,33 @@ fun TopAppBar(
         scrollBehavior as? ScrollBehavior ?: LocalTopAppBarScrollBehavior.current
     val backdrop = LocalTopAppBarBackdrop.current
     val surfaceColor = MiuixTheme.colorScheme.surface
-    // 实测顶栏高度（含状态栏 inset、随展开/折叠变化），供列表 padding 跟随。
-    val localTopBarHeight = LocalTopBarHeight.current
-    val measuredModifier = modifier.onGloballyPositioned { coords ->
-        val dp = with(coords.density) { coords.size.height.toDp() }
-        if (localTopBarHeight != null && (localTopBarHeight.value - dp).absoluteValue > 0.5.dp) {
-            localTopBarHeight.value = dp
-        }
-    }
     if (backdrop != null && isRuntimeShaderSupported()) {
         // 与 Demo 一致：顶栏透明，滚动时从内容图层采样做渐进式模糊。
         // 前提是内容铺满整页、顶栏叠加在上方（见 CollapsibleTopAppBarHost 的注释）。
         GlassTopAppBar(
             title = title,
-            modifier = measuredModifier,
+            modifier = modifier,
             subtitle = subtitle,
             scrollBehavior = effectiveScrollBehavior,
             backdrop = backdrop,
             progressiveBlur = true,
             bandBrush = GlassTopAppBarDefaults.bandBrush(surfaceColor),
             bandOverhang = GlassTopAppBarDefaults.BandOverhang,
-            navigationIcon = navigationIcon,
-            actions = actions,
+            navigationIcon = {
+                CompositionLocalProvider(LocalInGlassTopBar provides true) {
+                    navigationIcon()
+                }
+            },
+            actions = {
+                CompositionLocalProvider(LocalInGlassTopBar provides true) {
+                    actions()
+                }
+            },
         )
     } else {
         MiuixTopAppBar(
             title = title,
-            modifier = measuredModifier,
+            modifier = modifier,
             navigationIcon = navigationIcon,
             actions = actions,
             subtitle = subtitle,
@@ -733,29 +748,30 @@ fun TopAppBar(
         }
     }
     val backdrop = LocalTopAppBarBackdrop.current
-    val localTopBarHeight = LocalTopBarHeight.current
-    val measuredModifier = modifier.onGloballyPositioned { coords ->
-        val dp = with(coords.density) { coords.size.height.toDp() }
-        if (localTopBarHeight != null && (localTopBarHeight.value - dp).absoluteValue > 0.5.dp) {
-            localTopBarHeight.value = dp
-        }
-    }
     if (backdrop != null && isRuntimeShaderSupported()) {
         GlassTopAppBar(
             title = "",
-            modifier = measuredModifier,
+            modifier = modifier,
             scrollBehavior = effectiveScrollBehavior,
             backdrop = backdrop,
             progressiveBlur = true,
             bandBrush = GlassTopAppBarDefaults.bandBrush(MiuixTheme.colorScheme.surface),
             bandOverhang = GlassTopAppBarDefaults.BandOverhang,
-            navigationIcon = customTitle,
-            actions = actions,
+            navigationIcon = {
+                CompositionLocalProvider(LocalInGlassTopBar provides true) {
+                    customTitle()
+                }
+            },
+            actions = {
+                CompositionLocalProvider(LocalInGlassTopBar provides true) {
+                    actions()
+                }
+            },
         )
     } else {
         MiuixTopAppBar(
             title = "",
-            modifier = measuredModifier,
+            modifier = modifier,
             navigationIcon = customTitle,
             actions = actions,
             scrollBehavior = effectiveScrollBehavior,
@@ -889,13 +905,17 @@ fun IconDropdownMenu(
         }
     }
 
-    Box(
+    // 触发体必须和同排其它顶栏按钮走同一个分派：玻璃顶栏里浮现圆形毛玻璃背景，
+    // 普通顶栏里就是标准 IconButton。之前这里硬写 GlassIconButton，绕过了
+    // LocalInGlassTopBar 的判断，于是同一个顶栏里排序钮是玻璃圆钮、刷新钮是普通按钮，
+    // 形状对不上。
+    // 尺寸也交给顶栏：GlassIconButton 会用 GlassTopAppBarContext.size 覆盖调用方传的
+    // 尺寸，这里再写死 48dp 只会和同排按钮差出一圈（实测 143px vs 156px）。
+    IconButton(
+        onClick = { if (enabled) expanded = true },
+        enabled = enabled,
         modifier = modifier
-            .size(48.dp)
-            .glassPopupAnchor(anchor, cornerRadius = 24.dp)
-            .clip(CircleShape)
-            .clickable(enabled = enabled) { expanded = true },
-        contentAlignment = Alignment.Center,
+            .glassPopupAnchor(anchor, cornerRadius = 24.dp),
     ) {
         // 告诉库「图标」的实际边界：形变动画复制这块内容、按它的中心位移，
         // 不写这个 modifier 时库会复制整个 48dp 控件，图标就会飘出去再缩回（位移）。

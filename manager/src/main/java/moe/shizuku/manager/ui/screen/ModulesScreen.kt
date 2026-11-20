@@ -1,4 +1,4 @@
-package moe.shizuku.manager.ui.screen
+﻿package moe.shizuku.manager.ui.screen
 
 import android.graphics.BitmapFactory
 import android.widget.Toast
@@ -77,10 +77,12 @@ import moe.shizuku.manager.ui.miuix.Surface
 import moe.shizuku.manager.ui.miuix.Switch
 import moe.shizuku.manager.ui.miuix.Text
 import moe.shizuku.manager.ui.miuix.LocalContentBackdrop
+import moe.shizuku.manager.ui.miuix.miuixOverScroll
 import moe.shizuku.manager.ui.miuix.TopAppBar
 import moe.shizuku.manager.ui.miuix.topAppBarContentTopPadding
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.Scaffold
 import moe.shizuku.manager.ui.miuix.IconDropdownMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -329,8 +331,155 @@ fun ModulesScreen(
 
     val listState = rememberLazyListState()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // 内容铺满整页（含顶栏下方），记录进 backdrop；顶栏叠加在上方采样它做渐进模糊。
+    // Top bar actions: refresh, search, sort, module catalog, module settings.
+    val topBarActions: @Composable RowScope.() -> Unit = {
+        TelevisionRefreshButton(refreshing, refresh)
+        if (searching) {
+            IconButton(onClick = { searching = false; query = "" }) {
+                Icon(MiuixIcons.Close, contentDescription = null)
+            }
+        } else {
+            IconButton(onClick = { searching = true }) {
+                Icon(
+                    imageVector = MiuixIcons.Search,
+                    contentDescription = stringResource(R.string.modules_search)
+                )
+            }
+
+            // MIUIX icon dropdown menu; the selected item is carried by DropdownItem.
+            IconDropdownMenu(
+                entry = DropdownEntry(
+                    items = listOf(
+                        DropdownItem(
+                            text = stringResource(R.string.modules_sort_a_to_z),
+                            selected = sort.aToZ,
+                            onClick = {
+                                sort = sort.copy(
+                                    aToZ = true, zToA = false, sizeLowToHigh = false,
+                                    sizeHighToLow = false
+                                ).saved()
+                            },
+                        ),
+                        DropdownItem(
+                            text = stringResource(R.string.modules_sort_z_to_a),
+                            selected = sort.zToA,
+                            onClick = {
+                                sort = sort.copy(
+                                    aToZ = false, zToA = true, sizeLowToHigh = false,
+                                    sizeHighToLow = false
+                                ).saved()
+                            },
+                        ),
+                        DropdownItem(
+                            text = stringResource(R.string.modules_sort_size_low_to_high),
+                            selected = sort.sizeLowToHigh,
+                            onClick = {
+                                sort = sort.copy(
+                                    aToZ = false, zToA = false, sizeLowToHigh = true,
+                                    sizeHighToLow = false
+                                ).saved()
+                            },
+                        ),
+                        DropdownItem(
+                            text = stringResource(R.string.modules_sort_size_high_to_low),
+                            selected = sort.sizeHighToLow,
+                            onClick = {
+                                sort = sort.copy(
+                                    aToZ = false, zToA = false, sizeLowToHigh = false,
+                                    sizeHighToLow = true
+                                ).saved()
+                            },
+                        ),
+                        DropdownItem(
+                            text = stringResource(R.string.modules_sort_enabled_first),
+                            selected = sort.enabledFirst,
+                            onClick = { sort = sort.copy(enabledFirst = !sort.enabledFirst).saved() },
+                        ),
+                        DropdownItem(
+                            text = stringResource(R.string.modules_sort_action_first),
+                            selected = sort.actionFirst,
+                            onClick = { sort = sort.copy(actionFirst = !sort.actionFirst).saved() },
+                        ),
+                        DropdownItem(
+                            text = stringResource(R.string.modules_sort_webui_first),
+                            selected = sort.webUiFirst,
+                            onClick = { sort = sort.copy(webUiFirst = !sort.webUiFirst).saved() },
+                        ),
+                    ),
+                ),
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Sort,
+                    contentDescription = stringResource(R.string.modules_sort)
+                )
+            }
+
+            IconButton(onClick = { catalogOpen = true }) {
+                Icon(
+                    imageVector = MiuixIcons.CloudFill,
+                    contentDescription = stringResource(R.string.modules_find_modules)
+                )
+            }
+            IconButton(onClick = { tuneDialog = true }) {
+                Icon(
+                    imageVector = MiuixIcons.Tune,
+                    contentDescription = stringResource(R.string.modules_settings)
+                )
+            }
+        }
+    }
+
+    // The top bar is Scaffold's topBar slot: Scaffold measures its height into
+    // innerPadding, so the list follows the bar as it collapses.
+    // GlassTopAppBar provides its context inside the slot, so action buttons get
+    val moduleTopBar: @Composable () -> Unit = {
+        if (searching) {
+            TopAppBar(
+                modifier = Modifier.fillMaxWidth(),
+                title = {
+                    TextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth().televisionTextInput(TextFieldDefaults.shape),
+                        placeholder = { Text(stringResource(R.string.modules_search)) },
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        )
+                    )
+                },
+                actions = topBarActions
+            )
+        } else {
+            TopAppBar(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.tools_modules),
+                actions = topBarActions
+            )
+        }
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = moduleTopBar,
+        floatingActionButton = {
+            FloatingActionButton(
+                modifier = Modifier
+                    .televisionFocusShape(FloatingActionButtonDefaults.shape)
+                    .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
+                onClick = { installDialog = true }
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Add,
+                    contentDescription = stringResource(R.string.modules_install)
+                )
+            }
+        },
+    ) { innerPadding ->
+        // Content fills the page (including under the bar) and records into the
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -341,14 +490,14 @@ fun ModulesScreen(
             RefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = refresh,
-                contentPadding = PaddingValues(top = topAppBarContentTopPadding())
+                contentPadding = PaddingValues(top = innerPadding.calculateTopPadding())
             ) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().miuixOverScroll(),
                 contentPadding = PaddingValues(
                     start = 16.dp,
-                    top = topAppBarContentTopPadding(),
+                    top = innerPadding.calculateTopPadding(),
                     end = 16.dp,
                     bottom = bottomPadding + 88.dp
                 ),
@@ -457,174 +606,18 @@ fun ModulesScreen(
                     }
                 }
             }
-            }
         }
-
-    // 顶栏动作：刷新、搜索、排序、模块目录、模块设置。
-    val topBarActions: @Composable RowScope.() -> Unit = {
-                    TelevisionRefreshButton(refreshing, refresh)
-                    if (searching) {
-                        IconButton(onClick = { searching = false; query = "" }) {
-                            Icon(MiuixIcons.Close, contentDescription = null)
-                        }
-                    } else {
-                        IconButton(onClick = { searching = true }) {
-                            Icon(
-                                imageVector = MiuixIcons.Search,
-                                contentDescription = stringResource(R.string.modules_search)
-                            )
-                        }
-
-                        // MIUIX 风格的图标下拉菜单，排序项用 DropdownItem 的选中态。
-                        IconDropdownMenu(
-                            entry = DropdownEntry(
-                                items = listOf(
-                                    DropdownItem(
-                                        text = stringResource(R.string.modules_sort_a_to_z),
-                                        selected = sort.aToZ,
-                                        onClick = {
-                                            sort = sort.copy(
-                                                aToZ = true, zToA = false, sizeLowToHigh = false,
-                                                sizeHighToLow = false
-                                            ).saved()
-                                        },
-                                    ),
-                                    DropdownItem(
-                                        text = stringResource(R.string.modules_sort_z_to_a),
-                                        selected = sort.zToA,
-                                        onClick = {
-                                            sort = sort.copy(
-                                                aToZ = false, zToA = true, sizeLowToHigh = false,
-                                                sizeHighToLow = false
-                                            ).saved()
-                                        },
-                                    ),
-                                    DropdownItem(
-                                        text = stringResource(R.string.modules_sort_size_low_to_high),
-                                        selected = sort.sizeLowToHigh,
-                                        onClick = {
-                                            sort = sort.copy(
-                                                aToZ = false, zToA = false, sizeLowToHigh = true,
-                                                sizeHighToLow = false
-                                            ).saved()
-                                        },
-                                    ),
-                                    DropdownItem(
-                                        text = stringResource(R.string.modules_sort_size_high_to_low),
-                                        selected = sort.sizeHighToLow,
-                                        onClick = {
-                                            sort = sort.copy(
-                                                aToZ = false, zToA = false, sizeLowToHigh = false,
-                                                sizeHighToLow = true
-                                            ).saved()
-                                        },
-                                    ),
-                                    DropdownItem(
-                                        text = stringResource(R.string.modules_sort_enabled_first),
-                                        selected = sort.enabledFirst,
-                                        onClick = { sort = sort.copy(enabledFirst = !sort.enabledFirst).saved() },
-                                    ),
-                                    DropdownItem(
-                                        text = stringResource(R.string.modules_sort_action_first),
-                                        selected = sort.actionFirst,
-                                        onClick = { sort = sort.copy(actionFirst = !sort.actionFirst).saved() },
-                                    ),
-                                    DropdownItem(
-                                        text = stringResource(R.string.modules_sort_webui_first),
-                                        selected = sort.webUiFirst,
-                                        onClick = { sort = sort.copy(webUiFirst = !sort.webUiFirst).saved() },
-                                    ),
-                                ),
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Sort,
-                                contentDescription = stringResource(R.string.modules_sort)
-                            )
-                        }
-
-                    // Their modules screen is where repositories are found from, not the
-                    // other way round: the catalog belongs to the modules section, and this
-                    // is the second way in - the floating button's dialog is the first.
-                    IconButton(onClick = { catalogOpen = true }) {
-                        Icon(
-                            imageVector = MiuixIcons.CloudFill,
-                            contentDescription = stringResource(R.string.modules_find_modules)
-                        )
-                    }
-                    IconButton(onClick = { tuneDialog = true }) {
-                        Icon(
-                            imageVector = MiuixIcons.Tune,
-                            contentDescription = stringResource(R.string.modules_settings)
-                        )
-                    }
-                    }
-    }
-
-        if (searching) {
-            TopAppBar(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .zIndex(1f),
-                title = {
-                    // Their search bar: the title itself becomes the field, rather than a field
-                    // sitting in the list below it.
-                    if (searching) {
-                        TextField(
-                            value = query,
-                            onValueChange = { query = it },
-                            modifier = Modifier.fillMaxWidth().televisionTextInput(TextFieldDefaults.shape),
-                            placeholder = { Text(stringResource(R.string.modules_search)) },
-                            singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            )
-                        )
-                    } else {
-                        Text(stringResource(R.string.tools_modules))
-                    }
-                },
-                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-                actions = topBarActions
-            )
-        } else {
-            // 非搜索态用 MIUIX 的玻璃大字标题，与首页/设置页一致。
-            TopAppBar(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .zIndex(1f),
-                title = stringResource(R.string.tools_modules),
-                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-                actions = topBarActions
-            )
-        }
-
+        // The busy indicator sits inside the backdrop Box (BoxScope), so align() is
+        // available and it can be placed against the measured top bar height.
         if (busy) {
             LinearWavyProgressIndicator(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .padding(top = topAppBarContentTopPadding() - 16.dp)
+                    .padding(top = innerPadding.calculateTopPadding())
                     .zIndex(1f)
             )
         }
-
-        FloatingActionButton(
-            modifier = Modifier
-                .televisionFocusShape(FloatingActionButtonDefaults.shape)
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
-            onClick = { installDialog = true }
-        ) {
-            Icon(
-                imageVector = MiuixIcons.Add,
-                contentDescription = stringResource(R.string.modules_install)
-            )
         }
     }
 
