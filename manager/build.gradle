@@ -14,7 +14,16 @@ plugins {
 android {
     namespace = "moe.shizuku.manager"
     defaultConfig {
-        applicationId = "moe.shizuku.privileged.api"
+        // 发布用的包名。namespace（Java 包名）保持不变：源码目录、AIDL 与所有
+        // 内部 import 都挂在 moe.shizuku.manager 下，改它等于整仓重命名，
+        // 而且对系统来说 applicationId 才是身份。
+        //
+        // 刻意**不**改的两个常量（它们是 Shizuku 生态的协议，不是本应用的身份）：
+        //   - ApkUtils.ORIGINAL_PACKAGE_NAME = "moe.shizuku.privileged.api"
+        //     （隐藏/唤醒 stub 时按这个名字去找原包）
+        //   - ShizukuManagerProvider.EXTRA_BINDER 的 key 字符串
+        //     （server 与 manager 约定的 Bundle 键名）
+        applicationId = "com.sennagi.shizuku.hypernext"
         versionCode = rootProject.ext.versionCode
         versionName = rootProject.ext.versionName
         externalNativeBuild {

@@ -265,7 +265,10 @@ fun ShizukuApp(onRunSetup: () -> Unit) {
             TelevisionFocusOutline {
             // 状态栏透明 + 内容延伸到系统栏下面（和官方 Demo 一致），
             // 顶部 inset 由 MIUIX 顶栏自己处理，这里不能再加一次 statusBars padding。
-            Column(modifier = Modifier.fillMaxSize()) {
+            // 必须是 Box 而不是 Column：玻璃底栏是浮在内容之上的叠加层（靠
+            // align(BottomCenter) 定位），Column 是纵向线性布局，会把底栏排在内容
+            // 下方 —— 内容一长就把底栏挤出屏幕，表现为「滑到最底部才看到底栏渲染错位」。
+            Box(modifier = Modifier.fillMaxSize()) {
                 // Both the open detail and the pager live here, above the switch between
                 // the two, for two reasons: the pager used to be remembered inside the tab
                 // layout, so opening a detail threw it away and closing the detail started
@@ -297,6 +300,7 @@ fun ShizukuApp(onRunSetup: () -> Unit) {
                 BackHandler(enabled = current != null) { detail = null }
                 AnimatedContent(
                     targetState = current,
+                    modifier = Modifier.fillMaxSize(),
                     transitionSpec = {
                         val forward = targetState != null
                         val enter = slideInHorizontally(
@@ -578,13 +582,29 @@ private fun MainTabs(
     val bottomPadding = GlassNavigationBarDefaults.Height + barInset + 8.dp
 
     // 官方 Demo 的玻璃底栏靠 layerBackdrop 采样背后的内容。
-    val backdrop = rememberLayerBackdrop()
+    // 这里必须和顶栏那份 backdrop 一样，先用 drawRect 铺一层页面底色再 drawContent：
+    // 空的 rememberLayerBackdrop() 没有任何绘制指令，玻璃采样到的就是空图层 ——
+    // 表现为底栏变成一块不跟随内容变化的纯色（滑到列表底部时最明显）。
+    val surfaceColor = MiuixTheme.colorScheme.surface
+    val backdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
 
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
+        // backdrop 必须记录「整块内容区」的绘制结果：玻璃底栏靠它采样背后有什么。
+        // 之前把它挂在 CenteredContent 上（限宽 600dp 的那层），内容滚动到底部时
+        // 该层里可采样的像素变少，底栏就退化成一块纯色 —— 表现就是「滑到最底部
+        // 玻璃效果没了」。这里改挂在外层 Box，整屏内容都进图层。
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .layerBackdrop(backdrop)
+        ) {
         CenteredContent(
-            modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)
+            modifier = Modifier.fillMaxSize()
         ) {
             HorizontalPager(
                 state = pagerState,
@@ -641,48 +661,47 @@ private fun MainTabs(
                 }
             }
         }
+        }   // 关闭记录 backdrop 的内容层
 
         // 设置子页面只在设置 tab 上隐藏底栏；滑去别的 tab 底栏照常出现。
         if (!modulesFullscreen && !(settingsSubPage && pagerState.currentPage == 4)) {
-            // 0.9.5-beta01 官方 GlassNavigationBar。外层 Box(BottomCenter) 再兜一层，
-            // 保证不会因为父容器不是 BoxScope 而把底栏放到顶部。
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.BottomCenter,
-            ) {
-                GlassNavigationBar(
-                    items = tabs.mapIndexed { index, tab ->
-                        val label = stringResource(tab.label)
-                        GlassNavigationItem(
-                            icon = tab.selectedIcon,
-                            label = label,
-                            contentDescription = label,
-                            badge = if (index == 1 && grantedCount > 0) {
-                                {
-                                    // Demo 的 Badge 是贴图标右上角的小圆，文字用 footnote2，
-                                    // 不能用默认 body 字号，否则会把圆撑大。
-                                    Badge {
-                                        Text(
-                                            text = grantedCount.toString(),
-                                            style = MiuixTheme.textStyles.footnote2,
-                                        )
-                                    }
+            // 官方 GlassNavigationBar：它自己带 defaultWindowInsetsPadding 与 fillMaxWidth，
+            // 靠 align(BottomCenter) 叠在内容之上。
+            // 关键：它必须是 backdrop 内容层的**兄弟**（绘制在其后），这样它采样到的
+            // 才是背后真实的内容；若放进内容层内部，采样源里就只有它自己。
+            GlassNavigationBar(
+                items = tabs.mapIndexed { index, tab ->
+                    val label = stringResource(tab.label)
+                    GlassNavigationItem(
+                        icon = tab.selectedIcon,
+                        label = label,
+                        contentDescription = label,
+                        badge = if (index == 1 && grantedCount > 0) {
+                            {
+                                // Demo 的 Badge 是贴图标右上角的小圆，文字用 footnote2，
+                                // 不能用默认 body 字号，否则会把圆撑大。
+                                Badge {
+                                    Text(
+                                        text = grantedCount.toString(),
+                                        style = MiuixTheme.textStyles.footnote2,
+                                    )
                                 }
-                            } else null,
-                        )
-                    },
-                    selectedIndex = pagerState.currentPage,
-                    onSelect = { index ->
-                        if (index != pagerState.currentPage) {
-                            scope.launch { pagerState.scrollToPage(index) }
-                        }
-                    },
-                    backdrop = backdrop,
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .fillMaxWidth(),
-                )
-            }
+                            }
+                        } else null,
+                    )
+                },
+                selectedIndex = pagerState.currentPage,
+                onSelect = { index ->
+                    if (index != pagerState.currentPage) {
+                        scope.launch { pagerState.scrollToPage(index) }
+                    }
+                },
+                backdrop = backdrop,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth(),
+            )
         }
     }
 }

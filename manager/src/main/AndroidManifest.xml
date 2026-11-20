@@ -135,7 +135,8 @@
         tools:node="remove" />
 
     <queries>
-        <package android:name="moe.shizuku.privileged.api" />
+        <!-- 跟随 applicationId：这里查的是「本应用自己」（隐藏/唤醒 stub 时要能看到原包）。 -->
+        <package android:name="${applicationId}" />
 
         <!-- Without this, Android 11+ hides every other app's accessibility service and the
              manager would be a list of this app's own. -->
