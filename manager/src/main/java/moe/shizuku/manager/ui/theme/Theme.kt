@@ -37,11 +37,15 @@ import top.yukonga.miuix.kmp.utils.MiuixIndication
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
-/** Shizuku brand indigo, matching the XML theme's primaryColor. */
-private val BrandColor = Color(0xFF3F51B5)
+/** 解析失败时的兜底色，与 [DEFAULT_ACCENT_COLOR] 同源。 */
+private val BrandColor = Color(0xFF3482FF)
 
-/** The indigo seed used until the user chooses another accent. */
-const val DEFAULT_ACCENT_COLOR = "#3F51B5"
+/**
+ * 强调色种子。MIUIX 的默认主色是 #3482FF（蓝），Shizuku 原版是 #3F51B5（靛蓝）。
+ * 这里跟 MIUIX 走：整个界面是按 MIUIX 色板搭的，塞一个靛蓝种子进去会得到
+ * 一套「MIUIX 形状 + Shizuku 配色」的混合体，观感和参考实现对不上。
+ */
+const val DEFAULT_ACCENT_COLOR = "#3482FF"
 
 /**
  * True while the pure black (AMOLED) scheme is in use. Cards and the page are the

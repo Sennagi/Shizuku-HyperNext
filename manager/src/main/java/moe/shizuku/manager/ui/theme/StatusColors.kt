@@ -60,26 +60,20 @@ object StatusColors {
     }
 
     /**
-     * 动作按钮（启动 / 停止）的容器与文字色，对齐 Mishka 的 actionButton。
+     * 停止按钮的容器与文字色，对齐 Mishka 的 actionButton(Stop)。
      *
-     * 启动用淡绿底 + 绿字（和运行态同族），停止用淡红底 + 红字：这两个是语义动作，
-     * 不跟随强调色 —— 跟随之后「停止」在蓝色主题下会变成蓝的，破坏警示语义。
+     * 只做停止这一种：Mishka 的 actionButton 覆盖的是 restart/stop/reload 三个
+     * 次级动作，而「启动」走的是 textButtonColorsPrimary()（主题主色）。
+     * 把启动也做成绿色是错的 —— 那是 restart 的配色。
      */
     @Composable
     @ReadOnlyComposable
-    fun actionButton(action: ActionKind): ActionPalette {
+    fun stopActionButton(): ActionPalette {
         val isDark = LocalAppDarkMode.current
-        return when (action) {
-            ActionKind.Start -> ActionPalette(
-                container = if (isDark) Color(0xFF1B3A26) else Color(0xFFDFF5E3),
-                content = if (isDark) Color(0xFF66BB6A) else Color(0xFF43A047),
-            )
-
-            ActionKind.Stop -> ActionPalette(
-                container = if (isDark) Color(0xFF3A1B1B) else Color(0xFFFDE8E8),
-                content = if (isDark) Color(0xFFEF5350) else Color(0xFFE53935),
-            )
-        }
+        return ActionPalette(
+            container = if (isDark) Color(0xFF3A1B1B) else Color(0xFFFDE8E8),
+            content = if (isDark) Color(0xFFEF5350) else Color(0xFFE53935),
+        )
     }
 
     // Palette: hand-picked values; the scale names are labels, not Material scale steps.
@@ -95,9 +89,6 @@ object StatusColors {
 
 /** 运行状态：运行 / 过渡 / 停止 */
 enum class RunState { Running, Pending, Stopped }
-
-/** 动作种类：启动 / 停止 */
-enum class ActionKind { Start, Stop }
 
 /** 一组动作按钮配色。 */
 data class ActionPalette(val container: Color, val content: Color)

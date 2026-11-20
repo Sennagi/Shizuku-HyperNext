@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="notification">#3F51B5</color>
+    <!-- 跟 MIUIX 主色 #3482FF 对齐，不再用 Shizuku 原版的靛蓝 #3F51B5。 -->
+    <color name="notification">#3482FF</color>
 
-    <color name="app_color_light">#3F51B5</color>
-    <color name="app_color_dark">#B1B8DF</color>
+    <color name="app_color_light">#3482FF</color>
+    <color name="app_color_dark">#A8C7FF</color>
 
     <!--
       The switch widget draws its own card, because it is laid over a wallpaper and inside a

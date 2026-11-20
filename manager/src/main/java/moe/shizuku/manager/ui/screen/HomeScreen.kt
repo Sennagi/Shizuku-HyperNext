@@ -130,7 +130,7 @@ import moe.shizuku.manager.ui.component.AutoSizeText
 import moe.shizuku.manager.ui.component.ExpressiveCard
 import moe.shizuku.manager.ui.component.SegmentedColumn
 import moe.shizuku.manager.ui.theme.LocalAmoledTheme
-import moe.shizuku.manager.ui.theme.ActionKind
+import moe.shizuku.manager.ui.theme.ActionPalette
 import moe.shizuku.manager.ui.theme.RunState
 import moe.shizuku.manager.ui.theme.StatusColors
 import moe.shizuku.manager.ui.component.SegmentedListItem
@@ -1240,17 +1240,18 @@ private fun StatusFact(fact: StatusFactEntry, modifier: Modifier = Modifier) {
 }
 
 /**
- * 启动 / 停止，一行一个大按钮（对齐 Mishka 的 ActionButtonsSection）。
+ * 启动 / 停止，一行一个大按钮（照搬 Mishka 的 ActionButtonsSection）。
  *
  * 运行中只显示「停止」，未运行只显示「启动」——不是三个并排、按状态禁用。
  * 三个并排时其中两个恒为禁用态，占位却不做事；只留当前能做的那个，
  * 按钮本身也就成了状态的一部分。
  *
- * 颜色走 StatusColors.actionButton：启动淡绿、停止淡红，与状态卡同族。
- * 不复用主题 primary —— 「停止」跟强调色走会在蓝色主题下变蓝，警示语义就没了。
+ * 配色照搬 Mishka：启动走主题主色（它用的是 textButtonColorsPrimary），
+ * 停止走 actionButton(Stop) 的淡红。之前把启动也做成绿色是错的 —— 绿色在
+ * Mishka 里属于 restart，不是 start。
  *
- * 用 Button 而不是 TextButton：本项目的 TextButton 是 Button 的别名（同样的
- * 填充样式），没有 Mishka 那个 text/TextButtonColors 签名，走 buttonColors 等价。
+ * 启动中只画一个居中的转圈，不带文字：此时按钮已禁用，留着「启动」二字和
+ * 正在发生的事不符。
  */
 @Composable
 private fun ServerActionButtons(
@@ -1259,10 +1260,14 @@ private fun ServerActionButtons(
     onStart: () -> Unit,
     onStop: () -> Unit
 ) {
-    val action = if (running) ActionKind.Stop else ActionKind.Start
-    val palette = StatusColors.actionButton(action)
-    val label = if (running) stringResource(R.string.action_stop)
-    else stringResource(R.string.action_start)
+    val palette = if (running) {
+        StatusColors.stopActionButton()
+    } else {
+        ActionPalette(
+            container = MiuixTheme.colorScheme.primary,
+            content = MiuixTheme.colorScheme.onPrimary
+        )
+    }
 
     Button(
         onClick = if (running) onStop else onStart,
@@ -1271,21 +1276,26 @@ private fun ServerActionButtons(
             .heightIn(min = 52.dp),
         enabled = !starting,
         shape = CircleShape,
+        // 禁用态沿用同一组色：转圈画在上面，底色若淡一半整个按钮会显得消失。
         colors = ButtonDefaults.buttonColors(
             containerColor = palette.container,
             contentColor = palette.content,
-            disabledContainerColor = palette.container.copy(alpha = 0.5f),
-            disabledContentColor = palette.content.copy(alpha = 0.5f)
+            disabledContainerColor = palette.container,
+            disabledContentColor = palette.content
         )
     ) {
         if (starting) {
+            // 只有转圈：Button 的内容槽默认居中，不需要额外对齐。
             LoadingIndicator(
                 modifier = Modifier.size(22.dp),
                 color = palette.content
             )
-            Spacer(Modifier.width(10.dp))
+        } else {
+            Text(
+                text = if (running) stringResource(R.string.action_stop)
+                else stringResource(R.string.action_start)
+            )
         }
-        Text(text = label)
     }
 }
 
